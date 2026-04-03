@@ -691,7 +691,7 @@ const OverviewPage = ({ onExplore, lang }) => {
     <div style={{marginBottom:36}}>
       <div style={{display:'flex',gap:8,alignItems:'center',marginBottom:16}}><div style={{width:3,height:20,background:C.teal,borderRadius:2}}/><h2 style={{fontFamily:font.display,fontSize:22,fontWeight:800,color:C.navy}}>{s.overview.capTitle}</h2></div>
       <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:12}}>
-        {s.overview.capCards.map((cap,i)=>{const Icon=capIcons[i];const colors=[C.primary,C.teal,C.purple,C.amber,C.green,C.red];return(<div key={i} style={{padding:'16px',background:C.surface,borderRadius:12,border:`1px solid ${C.border}`,boxShadow:C.shadow,borderTop:`2px solid ${colors[i]}`}}>
+        {s.capCards.map((cap,i)=>{const Icon=capIcons[i];const colors=[C.primary,C.teal,C.purple,C.amber,C.green,C.red];return(<div key={i} style={{padding:'16px',background:C.surface,borderRadius:12,border:`1px solid ${C.border}`,boxShadow:C.shadow,borderTop:`2px solid ${colors[i]}`}}>
           <div style={{width:36,height:36,borderRadius:8,background:`${colors[i]}14`,display:'flex',alignItems:'center',justifyContent:'center',marginBottom:10}}><Icon size={18} color={colors[i]}/></div>
           <div style={{fontSize:13,fontWeight:700,color:C.text,marginBottom:5}}>{cap.title}</div>
           <div style={{fontSize:11,color:C.muted,lineHeight:1.65}}>{cap.desc}</div>
