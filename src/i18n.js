@@ -3,7 +3,7 @@ export const S = {
   en: {
     dir: 'ltr',
     locale: 'en',
-    appName: 'Gameea',
+    appName: 'Gam3ya',
     appNameAr: 'جمعية',
     tagline: 'Organize your money circle with people you trust',
     auth: {
@@ -25,7 +25,11 @@ export const S = {
       errGeneric: 'Something went wrong. Please try again.',
       confirmSent: 'Almost there! Check your email and click the confirmation link, then log in.',
     },
-    nav: { newGroup: 'New Group', logout: 'Log out' },
+    nav: {
+      newGroup: 'New Group', logout: 'Log out',
+      darkMode: 'Switch to dark mode', lightMode: 'Switch to light mode',
+      language: 'العربية',
+    },
     dash: {
       myGroups: 'My groups',
       discover: 'Groups you can join',
@@ -88,7 +92,7 @@ export const S = {
       potNote: 'Pot per turn = monthly amount × (members − 1), since the receiver doesn’t pay themselves.',
     },
     common: {
-      cancel: 'Cancel', close: 'Close', back: 'Back',
+      cancel: 'Cancel', close: 'Close', back: 'Back', confirm: 'Confirm',
       loading: 'Loading…',
       demoMode: 'Demo mode — data is stored in this browser only',
     },
@@ -99,7 +103,7 @@ export const S = {
     dir: 'rtl',
     locale: 'ar-EG',
     appName: 'جمعية',
-    appNameAr: 'Gameea',
+    appNameAr: 'Gam3ya',
     tagline: 'نظّم جمعيتك مع ناس تثق فيهم',
     auth: {
       welcome: 'أهلاً بيك في جمعية',
@@ -120,7 +124,11 @@ export const S = {
       errGeneric: 'حصلت مشكلة. حاول تاني.',
       confirmSent: 'خطوة أخيرة! افتح بريدك الإلكتروني ودوس على لينك التأكيد، وبعدين سجّل دخولك.',
     },
-    nav: { newGroup: 'جمعية جديدة', logout: 'تسجيل الخروج' },
+    nav: {
+      newGroup: 'جمعية جديدة', logout: 'تسجيل الخروج',
+      darkMode: 'الوضع الليلي', lightMode: 'الوضع النهاري',
+      language: 'English',
+    },
     dash: {
       myGroups: 'جمعياتي',
       discover: 'جمعيات تقدر تنضم لها',
@@ -183,7 +191,7 @@ export const S = {
       potNote: 'قيمة الدور = المبلغ الشهري × (عدد الأعضاء − 1)، لأن اللي بيقبض مش بيدفع لنفسه.',
     },
     common: {
-      cancel: 'إلغاء', close: 'إغلاق', back: 'رجوع',
+      cancel: 'إلغاء', close: 'إغلاق', back: 'رجوع', confirm: 'تأكيد',
       loading: 'جاري التحميل…',
       demoMode: 'وضع تجريبي — البيانات محفوظة في المتصفح ده بس',
     },

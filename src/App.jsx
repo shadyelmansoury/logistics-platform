@@ -1,65 +1,93 @@
-import { useState, useSyncExternalStore } from 'react';
-import { Languages, LogOut, HandCoins } from 'lucide-react';
-import { C, font } from './theme.js';
+import { useEffect, useState, useSyncExternalStore } from 'react';
+import { Languages, LogOut, Sun, Moon } from 'lucide-react';
 import { S } from './i18n.js';
 import * as store from './store.js';
 import Auth from './components/Auth.jsx';
 import Dashboard from './components/Dashboard.jsx';
 import CreateGroup from './components/CreateGroup.jsx';
 import GroupDetail from './components/GroupDetail.jsx';
-import { Btn, Avatar } from './components/ui.jsx';
+import { Avatar, Logo } from './components/ui.jsx';
+
+const LANG_KEY = 'gam3ya_lang';
+const THEME_KEY = 'gam3ya_theme';
+
+const initialLang = () => {
+  try { return localStorage.getItem(LANG_KEY) === 'en' ? 'en' : 'ar'; } catch { return 'ar'; }
+};
+
+const initialTheme = () => {
+  try {
+    const saved = localStorage.getItem(THEME_KEY);
+    if (saved === 'light' || saved === 'dark') return saved;
+  } catch { /* storage blocked */ }
+  return window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+};
 
 export default function App() {
   const db = useSyncExternalStore(store.subscribe, store.getDB);
-  const [lang, setLang] = useState('ar');
+  const [lang, setLang] = useState(initialLang);
+  const [theme, setTheme] = useState(initialTheme);
   const [view, setView] = useState({ name: 'dashboard' });
   const s = S[lang];
   const user = store.currentUser(db);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    root.setAttribute('lang', lang);
+    root.setAttribute('dir', s.dir);
+    try { localStorage.setItem(LANG_KEY, lang); } catch { /* storage blocked */ }
+  }, [lang, s.dir]);
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+    try { localStorage.setItem(THEME_KEY, theme); } catch { /* storage blocked */ }
+  }, [theme]);
 
   const goHome = () => setView({ name: 'dashboard' });
   const openGroup = (id) => setView({ name: 'group', id });
 
   return (
-    <div dir={s.dir} style={{ minHeight: '100vh', background: C.bg, fontFamily: font.body, color: C.ink }}>
-      {/* Navbar */}
-      <nav style={{ background: C.surface, borderBottom: `1px solid ${C.border}`, boxShadow: C.shadow,
-        position: 'sticky', top: 0, zIndex: 10 }}>
-        <div style={{ maxWidth: 860, margin: '0 auto', padding: '12px 20px',
-          display: 'flex', alignItems: 'center', gap: 12 }}>
-          <button onClick={goHome} style={{ display: 'flex', alignItems: 'center', gap: 9, background: 'none',
-            border: 'none', cursor: 'pointer', padding: 0 }}>
-            <div style={{ width: 34, height: 34, borderRadius: 10, background: C.primary,
-              display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <HandCoins size={18} color="#fff" />
-            </div>
-            <span style={{ fontSize: 20, fontWeight: 800, color: C.ink, fontFamily: font.display }}>
-              {s.appName}
-            </span>
+    <>
+      <nav className="nav">
+        <div className="nav-inner">
+          <button className="nav-brand" onClick={goHome} aria-label={s.appName}>
+            <Logo size={34} />
+            <span className="nav-brand-name">{s.appName}</span>
           </button>
-          <div style={{ flex: 1 }} />
-          <Btn variant="ghost" size="sm" onClick={() => setLang(lang === 'en' ? 'ar' : 'en')}
-            style={{ color: C.primary, fontWeight: 700 }}>
-            <Languages size={14} style={{ verticalAlign: -2 }} /> {lang === 'en' ? 'العربية' : 'English'}
-          </Btn>
+          <span className="nav-spacer" />
+          <button
+            className="icon-btn"
+            onClick={() => setLang(lang === 'en' ? 'ar' : 'en')}
+            aria-label={s.nav.language}
+          >
+            <Languages size={16} />
+            <span className="icon-btn-label">{s.nav.language}</span>
+          </button>
+          <button
+            className="icon-btn"
+            onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+            aria-label={theme === 'dark' ? s.nav.lightMode : s.nav.darkMode}
+            title={theme === 'dark' ? s.nav.lightMode : s.nav.darkMode}
+          >
+            {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
+          </button>
           {user && (
             <>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span className="nav-user">
                 <Avatar name={user.name} size={30} />
-                <span style={{ fontSize: 13, fontWeight: 700, color: C.inkMid }}>{user.name}</span>
-              </div>
-              <Btn variant="ghost" size="sm" onClick={() => { store.logout(); goHome(); }}>
-                <LogOut size={14} style={{ verticalAlign: -2 }} /> {s.nav.logout}
-              </Btn>
+                <span className="nav-user-name">{user.name}</span>
+              </span>
+              <button className="icon-btn" onClick={() => { store.logout(); goHome(); }} aria-label={s.nav.logout}>
+                <LogOut size={16} />
+                <span className="icon-btn-label">{s.nav.logout}</span>
+              </button>
             </>
           )}
         </div>
       </nav>
 
-      {/* Content */}
       {db.loading ? (
-        <div style={{ padding:'80px 20px', textAlign:'center', color:C.muted, fontSize:14 }}>
-          {s.common.loading}
-        </div>
+        <div className="loading-screen">{s.common.loading}</div>
       ) : !user ? (
         <Auth s={s} />
       ) : view.name === 'create' ? (
@@ -71,10 +99,10 @@ export default function App() {
           onOpen={openGroup} onCreate={() => setView({ name: 'create' })} />
       )}
 
-      <footer style={{ textAlign: 'center', padding: '30px 20px', fontSize: 11, color: C.mutedLight }}>
+      <footer className="footer">
         {s.appName} · {s.appNameAr} — {s.tagline}
-        {store.backend === 'local' && <div style={{ marginTop: 6 }}>{s.common.demoMode}</div>}
+        {store.backend === 'local' && <div>{s.common.demoMode}</div>}
       </footer>
-    </div>
+    </>
   );
 }

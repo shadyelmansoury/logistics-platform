@@ -1,9 +1,9 @@
-# Gameea — جمعية
+# Gam3ya — جمعية
 
-A bilingual (Arabic-first, RTL + English) web app for organizing a **Gameea** — the
-Egyptian rotating savings circle. A group of people who trust each other agree on a
-fixed monthly amount; every month all members pay that amount to one member, taking
-turns until every member has had their payout month.
+A bilingual (Arabic-first, RTL + English) web app for organizing a **Gam3ya
+(جمعية)** — the Egyptian rotating savings circle. A group of people who trust
+each other agree on a fixed monthly amount; every month all members pay that
+amount to one member, taking turns until every member has had their payout month.
 
 The app has two backends behind the same code:
 
@@ -20,7 +20,7 @@ The app has two backends behind the same code:
 - **Accounts** — register with name, email, and phone; log in / log out.
 - **Create a group** — whoever creates a group becomes its **admin** and defines:
   - the fixed monthly amount and currency (EGP, USD, EUR, SAR, AED)
-  - the **max number of members** (which equals the number of months the Gameea runs)
+  - the **max number of members** (which equals the number of months the Gam3ya runs)
   - the first payout month
 - **Join with admin approval** — members ask to join; the group admin gives the
   final OK (approve / reject) for every request. Full groups can't be joined.
@@ -34,7 +34,16 @@ The app has two backends behind the same code:
 - **Admin panel** — approve/reject join requests, edit group details, change max
   members (never below current members or taken months), remove members, delete
   the group.
-- **Arabic / English toggle** — full RTL support, Egyptian Arabic wording.
+- **Arabic / English toggle** — full RTL support, Egyptian Arabic wording, and a
+  single type family (IBM Plex Sans Arabic) that treats both scripts as equals.
+- **Light & dark mode** — follows the device preference by default, with a manual
+  toggle that's remembered per browser.
+- **Mobile-first** — responsive layout, 44px touch targets, sticky nav, and
+  numeric keyboards on amount fields.
+- **Share-ready** — Open Graph / Twitter metadata with a branded preview image,
+  so links shared on WhatsApp show the app name, description, and card image.
+  (`og:image` uses a relative URL that WhatsApp's crawler resolves against your
+  deployed domain — no configuration needed.)
 
 ## Set up the real backend (Supabase — ~10 minutes, free tier)
 
@@ -80,7 +89,11 @@ npm run build   # output in dist/
 ## Project structure
 
 ```
-├── index.html                    # Entry HTML (RTL, Arabic + Latin fonts)
+├── index.html                    # Entry HTML: share metadata, icons, fonts
+├── public/
+│   ├── favicon.svg               # Brand mark (rotation circle around a shared pot)
+│   ├── og-image.png              # WhatsApp / social share preview card
+│   └── apple-touch-icon.png      # iOS home-screen icon
 ├── supabase/
 │   └── schema.sql                # Database schema + security rules (run once in Supabase)
 ├── src/
@@ -88,11 +101,11 @@ npm run build   # output in dist/
 │   ├── App.jsx                   # Shell: navbar, language toggle, routing
 │   ├── store.js                  # Data layer facade — picks Supabase or demo mode
 │   ├── backend/
-│   │   ├── helpers.js            # Gameea rules shared by both backends
+│   │   ├── helpers.js            # Gam3ya rules shared by both backends
 │   │   ├── supabaseStore.js      # Real backend: Supabase auth + Postgres + realtime
 │   │   └── localStore.js         # Demo backend: localStorage
 │   ├── i18n.js                   # English + Egyptian Arabic translations
-│   ├── theme.js                  # Design tokens
+│   ├── styles.css                # Design system: tokens, light/dark themes, components
 │   └── components/
 │       ├── Auth.jsx              # Register / login
 │       ├── Dashboard.jsx         # My groups + discoverable groups
@@ -121,4 +134,4 @@ Security lives in the database (`supabase/schema.sql`), not just the UI:
 - React 18 + Vite
 - Supabase (auth, Postgres, realtime) — optional, falls back to localStorage
 - Lucide React (icons)
-- DM Sans + Barlow Condensed + DM Mono + Noto Kufi Arabic (Google Fonts)
+- IBM Plex Sans Arabic + IBM Plex Mono (Google Fonts) — one family for Arabic and Latin

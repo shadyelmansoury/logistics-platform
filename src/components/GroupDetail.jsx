@@ -1,24 +1,20 @@
 import { useEffect, useState } from 'react';
 import {
-  ArrowLeft, Crown, Users, CalendarDays, Wallet, Settings2,
+  ArrowLeft, Crown, Users, CalendarDays, Wallet, Settings2, ChevronDown,
   CheckCircle2, Circle, Hourglass, UserPlus, Trash2, LogOut, HandCoins,
 } from 'lucide-react';
-import { C, font } from '../theme.js';
-import { Card, Btn, Badge, SectionTitle, Avatar, Empty, Field, Input, inputStyle, ErrorBox } from './ui.jsx';
+import {
+  Card, Btn, Badge, SectionTitle, Avatar, Empty, Field, Input, ErrorBox, InfoBox, ConfirmDialog,
+} from './ui.jsx';
 import { monthLabel, fmtMoney, t } from '../i18n.js';
 import * as store from '../store.js';
 
-const statusColors = {
-  forming: { c:C.gold, bg:C.goldLight, b:C.goldBorder },
-  active: { c:C.primary, bg:C.primaryLight, b:C.primaryBorder },
-  completed: { c:C.muted, bg:C.surfaceAlt, b:C.border },
-};
+const STATUS_VARIANT = { forming: 'gold', active: 'primary', completed: 'muted' };
 
 // ─── Header ───────────────────────────────────────────────────────────────────
 function Header({ g, s, lang, admin }) {
   const d = store.getDB();
   const status = store.groupStatus(g);
-  const sc = statusColors[status];
   const gs = s.group;
   const adminUser = store.userById(d, g.adminId);
   const pot = g.amount * (g.maxMembers - 1);
@@ -31,83 +27,83 @@ function Header({ g, s, lang, admin }) {
   ];
 
   return (
-    <Card style={{ padding:22 }}>
-      <div style={{ display:'flex', alignItems:'flex-start', gap:14, flexWrap:'wrap' }}>
-        <Avatar name={g.name} size={52} color={C.primary} />
-        <div style={{ flex:1, minWidth:200 }}>
-          <div style={{ display:'flex', alignItems:'center', gap:10, flexWrap:'wrap' }}>
-            <span style={{ fontSize:24, fontWeight:800, color:C.ink, fontFamily:font.display }}>{g.name}</span>
-            <Badge color={sc.c} bg={sc.bg} border={sc.b}>{gs.status[status]}</Badge>
-            {admin && <Badge color={C.gold} bg={C.goldLight} border={C.goldBorder}><Crown size={10} style={{ verticalAlign:-1 }} /> {s.dash.adminBadge}</Badge>}
+    <Card>
+      <div className="group-card-head">
+        <Avatar name={g.name} size={52} />
+        <div style={{ flex: 1, minWidth: 200 }}>
+          <div className="group-card-title">
+            <span className="group-title">{g.name}</span>
+            <Badge variant={STATUS_VARIANT[status]}>{gs.status[status]}</Badge>
+            {admin && <Badge variant="gold"><Crown size={11} /> {s.dash.adminBadge}</Badge>}
           </div>
-          {g.description && <div style={{ fontSize:13, color:C.muted, marginTop:6, lineHeight:1.6 }}>{g.description}</div>}
-          <div style={{ fontSize:12, color:C.mutedLight, marginTop:6 }}>
+          {g.description && <p className="group-desc">{g.description}</p>}
+          <div className="group-sub">
             {gs.adminLabel}: {adminUser?.name || '—'} · {g.members.length}/{g.maxMembers} {s.dash.members}
           </div>
         </div>
       </div>
-      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(140px, 1fr))', gap:10, marginTop:16 }}>
+      <div className="stat-grid" style={{ marginTop: 16 }}>
         {stats.map((st, i) => (
-          <div key={i} style={{ padding:'10px 12px', background:C.surfaceAlt, borderRadius:10, border:`1px solid ${C.border}` }}>
-            <div style={{ fontSize:10, color:C.muted, textTransform:'uppercase', letterSpacing:0.5, fontFamily:font.mono, marginBottom:4 }}>{st.label}</div>
-            <div style={{ fontSize:15, fontWeight:800, color:C.ink, fontFamily:font.display }}>{st.val}</div>
+          <div key={i} className="stat">
+            <div className="stat-label">{st.label}</div>
+            <div className="stat-value">{st.val}</div>
           </div>
         ))}
       </div>
-      <div style={{ fontSize:11, color:C.mutedLight, marginTop:10, lineHeight:1.5 }}>{gs.potNote}</div>
+      <p className="hint-note">{gs.potNote}</p>
     </Card>
   );
 }
 
-// ─── Month picker (member without a month) ────────────────────────────────────
-function MonthPicker({ g, user, s, lang, onPicked }) {
+// ─── Month picker ─────────────────────────────────────────────────────────────
+function MonthPicker({ g, user, s, onPicked }) {
   const [selected, setSelected] = useState(null);
   const gs = s.group;
   const months = store.monthsOf(g);
   const me = store.memberOf(g, user.id);
+  const d = store.getDB();
 
   return (
-    <Card style={{ border:`1.5px solid ${C.primaryBorder}`, background:C.primaryLight }}>
-      <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:6 }}>
-        <CalendarDays size={17} color={C.primary} />
-        <span style={{ fontSize:17, fontWeight:800, color:C.primaryDark, fontFamily:font.display }}>
-          {me.month ? gs.changeMonth : gs.pickTitle}
-        </span>
+    <Card className="card-primary">
+      <div className="stack" style={{ gap: 12 }}>
+        <div>
+          <div className="group-card-title" style={{ fontSize: 17 }}>
+            <CalendarDays size={17} style={{ color: 'var(--primary)' }} />
+            <span>{me.month ? gs.changeMonth : gs.pickTitle}</span>
+          </div>
+          <p className="field-hint" style={{ marginTop: 4 }}>{gs.pickHint}</p>
+        </div>
+        <div className="month-grid">
+          {months.map((m) => {
+            const owner = store.recipientOf(g, m);
+            const takenByOther = owner && owner.userId !== user.id;
+            const isMine = owner && owner.userId === user.id;
+            const isSelected = selected === m;
+            const cls = ['month-cell', isSelected && 'is-selected', isMine && !isSelected && 'is-mine']
+              .filter(Boolean).join(' ');
+            return (
+              <button
+                key={m}
+                type="button"
+                disabled={takenByOther}
+                className={cls}
+                onClick={() => setSelected(isSelected ? null : m)}
+                aria-pressed={isSelected}
+              >
+                <div className="month-cell-name">{monthLabel(m, s.locale)}</div>
+                <div className="month-cell-owner">
+                  {isMine ? gs.you : takenByOther ? store.userById(d, owner.userId)?.name : gs.available}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+        {selected && (
+          <Btn size="lg" block onClick={() => { store.pickMonth(g.id, user.id, selected); setSelected(null); onPicked?.(); }}>
+            {gs.confirmPick} — {monthLabel(selected, s.locale)}
+          </Btn>
+        )}
       </div>
-      <div style={{ fontSize:12, color:C.inkMid, lineHeight:1.6, marginBottom:14 }}>{gs.pickHint}</div>
-      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(150px, 1fr))', gap:8 }}>
-        {months.map((m) => {
-          const owner = store.recipientOf(g, m);
-          const takenByOther = owner && owner.userId !== user.id;
-          const isMine = owner && owner.userId === user.id;
-          const isSelected = selected === m;
-          const d = store.getDB();
-          return (
-            <button key={m} disabled={takenByOther}
-              onClick={() => setSelected(isSelected ? null : m)}
-              style={{
-                padding:'10px 12px', borderRadius:10, textAlign:'start', fontFamily:font.body,
-                cursor: takenByOther ? 'not-allowed' : 'pointer',
-                background: isSelected ? C.primary : isMine ? C.goldLight : takenByOther ? C.surfaceAlt : C.surface,
-                border: `1.5px solid ${isSelected ? C.primaryDark : isMine ? C.goldBorder : takenByOther ? C.border : C.borderMid}`,
-                opacity: takenByOther ? 0.65 : 1,
-              }}>
-              <div style={{ fontSize:13, fontWeight:700, color: isSelected ? '#fff' : C.ink }}>
-                {monthLabel(m, s.locale)}
-              </div>
-              <div style={{ fontSize:11, marginTop:2, color: isSelected ? 'rgba(255,255,255,0.8)' : takenByOther ? C.muted : isMine ? C.gold : C.primary }}>
-                {isMine ? gs.you : takenByOther ? store.userById(d, owner.userId)?.name : gs.available}
-              </div>
-            </button>
-          );
-        })}
-      </div>
-      {selected && (
-        <Btn size="lg" style={{ width:'100%', marginTop:14 }}
-          onClick={() => { store.pickMonth(g.id, user.id, selected); setSelected(null); onPicked?.(); }}>
-          {gs.confirmPick} — {monthLabel(selected, s.locale)}
-        </Btn>
-      )}
     </Card>
   );
 }
@@ -121,46 +117,41 @@ function ScheduleTab({ g, user, s, lang }) {
   const pot = g.amount * (g.maxMembers - 1);
 
   return (
-    <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+    <div className="stack-sm">
       {months.map((m, i) => {
         const owner = store.recipientOf(g, m);
         const ownerUser = owner ? store.userById(d, owner.userId) : null;
         const isMine = owner?.userId === user?.id;
         const isCurrent = m === current;
         const isPast = m < current;
-        const paidCount = Object.keys(g.payments[m] || {}).filter((pid) => pid !== owner?.userId && store.memberOf(g, pid)).length;
+        const paidCount = Object.keys(g.payments[m] || {})
+          .filter((pid) => pid !== owner?.userId && store.memberOf(g, pid)).length;
         const payerTotal = Math.max(g.members.length - 1, 0);
+        const rowCls = ['schedule-row', isMine && 'is-mine', !isMine && isCurrent && 'is-current', isPast && !isMine && 'is-past']
+          .filter(Boolean).join(' ');
         return (
-          <div key={m} style={{
-            display:'flex', alignItems:'center', gap:14, padding:'13px 16px', borderRadius:12,
-            background: isMine ? C.goldLight : isCurrent ? C.primaryLight : C.surface,
-            border: `1.5px solid ${isMine ? C.goldBorder : isCurrent ? C.primaryBorder : C.border}`,
-            opacity: isPast && !isMine ? 0.75 : 1, boxShadow:C.shadow,
-          }}>
-            <div style={{ width:30, height:30, borderRadius:'50%', flexShrink:0,
-              background: owner ? (isMine ? C.gold : C.primary) : C.surfaceAlt,
-              border: owner ? 'none' : `1.5px dashed ${C.borderMid}`,
-              color:'#fff', display:'flex', alignItems:'center', justifyContent:'center', fontSize:12, fontWeight:800 }}>
+          <div key={m} className={rowCls}>
+            <span className={`turn-dot${owner ? (isMine ? ' is-gold' : '') : ' is-empty'}`}>
               {owner ? i + 1 : ''}
-            </div>
-            <div style={{ flex:1, minWidth:0 }}>
-              <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap' }}>
-                <span style={{ fontSize:14, fontWeight:700, color:C.ink }}>{monthLabel(m, s.locale)}</span>
-                {isCurrent && <Badge>{gs.currentMonth}</Badge>}
-                {isMine && <Badge color={C.gold} bg={C.goldLight} border={C.goldBorder}>{gs.you}</Badge>}
+            </span>
+            <div className="schedule-main">
+              <div className="schedule-month">
+                <span>{monthLabel(m, s.locale)}</span>
+                {isCurrent && <Badge variant="primary">{gs.currentMonth}</Badge>}
+                {isMine && <Badge variant="gold">{gs.you}</Badge>}
               </div>
-              <div style={{ fontSize:12, color: owner ? C.muted : C.mutedLight, marginTop:2 }}>
+              <div className={`schedule-recipient${owner ? '' : ' is-unassigned'}`}>
                 {owner
                   ? `${ownerUser?.name || '?'} ${gs.receives} ${fmtMoney(pot, g.currency, lang)}`
                   : gs.unassigned}
               </div>
             </div>
             {owner && payerTotal > 0 && (
-              <div style={{ textAlign:'center', flexShrink:0 }}>
-                <div style={{ fontSize:13, fontWeight:800, color: paidCount >= payerTotal ? C.primary : C.muted, fontFamily:font.display }}>
+              <div className="schedule-count">
+                <div className={`schedule-count-value${paidCount >= payerTotal ? ' is-complete' : ''}`}>
                   {paidCount}/{payerTotal}
                 </div>
-                <div style={{ fontSize:9, color:C.mutedLight, fontFamily:font.mono, textTransform:'uppercase' }}>{gs.paid}</div>
+                <div className="schedule-count-label">{gs.paid}</div>
               </div>
             )}
           </div>
@@ -176,12 +167,11 @@ function PaymentsTab({ g, user, s, lang, admin }) {
   const gs = s.group;
   const months = store.monthsOf(g);
   const current = store.nowMonth();
-  const defaultOpen = months.includes(current) ? current : months[0];
-  const [open, setOpen] = useState(defaultOpen);
+  const [open, setOpen] = useState(months.includes(current) ? current : months[0]);
   const pot = g.amount * (g.maxMembers - 1);
 
   return (
-    <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+    <div className="stack-sm">
       {months.map((m) => {
         const owner = store.recipientOf(g, m);
         const ownerUser = owner ? store.userById(d, owner.userId) : null;
@@ -189,44 +179,49 @@ function PaymentsTab({ g, user, s, lang, admin }) {
         const paidCount = payers.filter((p) => g.payments[m]?.[p.userId]).length;
         const isOpen = open === m;
         return (
-          <Card key={m} style={{ padding:0, overflow:'hidden' }}>
-            <button onClick={() => setOpen(isOpen ? null : m)}
-              style={{ width:'100%', display:'flex', alignItems:'center', gap:12, padding:'13px 16px',
-                background: isOpen ? C.surfaceAlt : C.surface, border:'none', cursor:'pointer',
-                fontFamily:font.body, textAlign:'start' }}>
-              <Wallet size={16} color={owner ? C.primary : C.mutedLight} style={{ flexShrink:0 }} />
-              <div style={{ flex:1, minWidth:0 }}>
-                <div style={{ fontSize:14, fontWeight:700, color:C.ink }}>
+          <Card key={m} className="card-tight">
+            <button
+              type="button"
+              className={`pay-head${isOpen ? ' is-open' : ''}`}
+              onClick={() => setOpen(isOpen ? null : m)}
+              aria-expanded={isOpen}
+            >
+              <Wallet size={16} style={{ color: owner ? 'var(--primary)' : 'var(--faint)', flexShrink: 0 }} />
+              <div className="pay-head-main">
+                <div className="pay-head-month">
                   {monthLabel(m, s.locale)}{m === current ? ` · ${gs.currentMonth}` : ''}
                 </div>
-                <div style={{ fontSize:11, color:C.muted, marginTop:1 }}>
+                <div className="pay-head-sub">
                   {owner ? `${ownerUser?.name} ${gs.receives} ${fmtMoney(pot, g.currency, lang)}` : gs.unassigned}
                 </div>
               </div>
               {owner && payers.length > 0 && (
-                <Badge color={paidCount >= payers.length ? C.primary : C.muted}
-                  bg={paidCount >= payers.length ? C.primaryLight : C.surfaceAlt}
-                  border={paidCount >= payers.length ? C.primaryBorder : C.border}>
+                <Badge variant={paidCount >= payers.length ? 'primary' : 'muted'}>
                   {t(gs.progress, { p: paidCount, t: payers.length })}
                 </Badge>
               )}
+              <ChevronDown size={16} className="pay-chevron" />
             </button>
+            {isOpen && owner && payers.length > 0 && (
+              <div className="progress" aria-hidden="true">
+                <div className="progress-fill" style={{ width: `${(paidCount / payers.length) * 100}%` }} />
+              </div>
+            )}
             {isOpen && owner && (
-              <div style={{ padding:'4px 16px 14px', display:'flex', flexDirection:'column', gap:6 }}>
+              <div className="pay-body">
                 {payers.map((p) => {
                   const pu = store.userById(d, p.userId);
                   const paidAt = g.payments[m]?.[p.userId];
                   const canToggle = admin || p.userId === user?.id;
                   return (
-                    <div key={p.userId} style={{ display:'flex', alignItems:'center', gap:10,
-                      padding:'8px 12px', background:C.bg, borderRadius:10, border:`1px solid ${C.border}` }}>
+                    <div key={p.userId} className="pay-row">
                       {paidAt
-                        ? <CheckCircle2 size={16} color={C.primary} style={{ flexShrink:0 }} />
-                        : <Circle size={16} color={C.mutedLight} style={{ flexShrink:0 }} />}
-                      <div style={{ flex:1, fontSize:13, fontWeight:600, color:C.ink }}>
+                        ? <CheckCircle2 size={16} style={{ color: 'var(--primary)', flexShrink: 0 }} />
+                        : <Circle size={16} style={{ color: 'var(--faint)', flexShrink: 0 }} />}
+                      <span className="pay-row-name">
                         {pu?.name}{p.userId === user?.id ? ` (${gs.you})` : ''}
-                      </div>
-                      <span style={{ fontSize:11, fontWeight:700, color: paidAt ? C.primary : C.muted }}>
+                      </span>
+                      <span className={`pay-row-status${paidAt ? ' is-paid' : ''}`}>
                         {paidAt ? gs.paid : gs.notPaid}
                       </span>
                       {canToggle && (
@@ -241,7 +236,9 @@ function PaymentsTab({ g, user, s, lang, admin }) {
               </div>
             )}
             {isOpen && !owner && (
-              <div style={{ padding:'4px 16px 14px', fontSize:12, color:C.mutedLight }}>{gs.unassigned}</div>
+              <div className="pay-body">
+                <span className="field-hint">{gs.unassigned}</span>
+              </div>
             )}
           </Card>
         );
@@ -254,55 +251,74 @@ function PaymentsTab({ g, user, s, lang, admin }) {
 function MembersTab({ g, user, s, admin, onLeft }) {
   const d = store.getDB();
   const gs = s.group;
+  const [confirming, setConfirming] = useState(null); // { type: 'remove'|'leave', userId }
+
+  const doConfirm = () => {
+    if (confirming.type === 'leave') {
+      store.removeMember(g.id, user.id);
+      setConfirming(null);
+      onLeft();
+    } else {
+      store.removeMember(g.id, confirming.userId);
+      setConfirming(null);
+    }
+  };
+
   return (
-    <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+    <div className="stack-sm">
       {g.members.map((m) => {
         const mu = store.userById(d, m.userId);
         const isMe = m.userId === user?.id;
         const isGroupAdmin = m.userId === g.adminId;
         return (
-          <div key={m.userId} style={{ display:'flex', alignItems:'center', gap:12, padding:'12px 16px',
-            background:C.surface, borderRadius:12, border:`1px solid ${C.border}`, boxShadow:C.shadow }}>
-            <Avatar name={mu?.name} size={38} color={isGroupAdmin ? C.gold : C.primary} />
-            <div style={{ flex:1, minWidth:0 }}>
-              <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap' }}>
-                <span style={{ fontSize:14, fontWeight:700, color:C.ink }}>{mu?.name}{isMe ? ` (${gs.you})` : ''}</span>
-                {isGroupAdmin && <Badge color={C.gold} bg={C.goldLight} border={C.goldBorder}><Crown size={10} style={{ verticalAlign:-1 }} /> {s.dash.adminBadge}</Badge>}
+          <div key={m.userId} className="member-row">
+            <Avatar name={mu?.name} size={38} gold={isGroupAdmin} />
+            <div className="member-main">
+              <div className="member-name">
+                <span>{mu?.name}{isMe ? ` (${gs.you})` : ''}</span>
+                {isGroupAdmin && <Badge variant="gold"><Crown size={11} /> {s.dash.adminBadge}</Badge>}
               </div>
-              <div style={{ fontSize:12, color:C.muted, marginTop:2 }}>
+              <div className="member-sub">
                 {m.month ? `${gs.monthOf}: ${monthLabel(m.month, s.locale)}` : gs.noMonth}
               </div>
             </div>
             {admin && !isGroupAdmin && (
-              <Btn size="sm" variant="danger" onClick={() => {
-                if (window.confirm(gs.removeConfirm)) store.removeMember(g.id, m.userId);
-              }}>
-                <Trash2 size={12} style={{ verticalAlign:-2 }} /> {gs.remove}
+              <Btn size="sm" variant="danger" onClick={() => setConfirming({ type: 'remove', userId: m.userId })}>
+                <Trash2 size={13} /> {gs.remove}
               </Btn>
             )}
             {isMe && !isGroupAdmin && (
-              <Btn size="sm" variant="danger" onClick={() => {
-                if (window.confirm(gs.leaveConfirm)) { store.removeMember(g.id, user.id); onLeft(); }
-              }}>
-                <LogOut size={12} style={{ verticalAlign:-2 }} /> {gs.leave}
+              <Btn size="sm" variant="danger" onClick={() => setConfirming({ type: 'leave' })}>
+                <LogOut size={13} /> {gs.leave}
               </Btn>
             )}
           </div>
         );
       })}
+      <ConfirmDialog
+        open={Boolean(confirming)}
+        danger
+        title={confirming?.type === 'leave' ? gs.leave : gs.remove}
+        body={confirming?.type === 'leave' ? gs.leaveConfirm : gs.removeConfirm}
+        confirmLabel={s.common.confirm}
+        cancelLabel={s.common.cancel}
+        onConfirm={doConfirm}
+        onCancel={() => setConfirming(null)}
+      />
     </div>
   );
 }
 
 // ─── Manage tab (admin) ───────────────────────────────────────────────────────
-function ManageTab({ g, s, lang, onDeleted }) {
+function ManageTab({ g, s, onDeleted }) {
   const d = store.getDB();
   const gs = s.group;
   const [form, setForm] = useState({
     name: g.name, description: g.description, amount: String(g.amount),
     maxMembers: String(g.maxMembers), startMonth: g.startMonth,
   });
-  const [msg, setMsg] = useState(null); // {ok, text}
+  const [msg, setMsg] = useState(null); // { ok, text }
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
   const full = g.members.length >= g.maxMembers;
 
@@ -311,81 +327,92 @@ function ManageTab({ g, s, lang, onDeleted }) {
     setMsg(null);
     const amount = Number(form.amount);
     const maxMembers = Number(form.maxMembers);
-    if (!form.name.trim() || !amount || amount <= 0) return setMsg({ ok:false, text:s.create.errAmount });
-    if (!maxMembers || maxMembers < 2 || maxMembers > 36) return setMsg({ ok:false, text:s.create.errMax });
+    if (!form.name.trim() || !amount || amount <= 0) return setMsg({ ok: false, text: s.create.errAmount });
+    if (!maxMembers || maxMembers < 2 || maxMembers > 36) return setMsg({ ok: false, text: s.create.errMax });
     try {
       store.updateGroup(g.id, {
         name: form.name.trim(), description: form.description.trim(),
         amount, maxMembers, startMonth: form.startMonth,
       });
-      setMsg({ ok:true, text:gs.saved });
+      setMsg({ ok: true, text: gs.saved });
     } catch {
-      setMsg({ ok:false, text:gs.errMaxTooLow });
+      setMsg({ ok: false, text: gs.errMaxTooLow });
     }
   };
 
   return (
-    <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
+    <div className="stack">
       <Card>
-        <SectionTitle><UserPlus size={13} style={{ verticalAlign:-2 }} /> {gs.requests}</SectionTitle>
-        {g.joinRequests.length === 0 ? (
-          <Empty icon={UserPlus} text={gs.noRequests} />
-        ) : (
-          <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
-            {g.joinRequests.map((r) => {
-              const ru = store.userById(d, r.userId);
-              return (
-                <div key={r.userId} style={{ display:'flex', alignItems:'center', gap:12, padding:'10px 14px',
-                  background:C.bg, borderRadius:10, border:`1px solid ${C.border}` }}>
-                  <Avatar name={ru?.name} size={34} />
-                  <div style={{ flex:1 }}>
-                    <div style={{ fontSize:14, fontWeight:700, color:C.ink }}>{ru?.name}</div>
-                    <div style={{ fontSize:11, color:C.muted, direction:'ltr', textAlign:'start' }}>{ru?.email}{ru?.phone ? ` · ${ru.phone}` : ''}</div>
+        <div className="stack" style={{ gap: 12 }}>
+          <SectionTitle><UserPlus size={13} /> {gs.requests}</SectionTitle>
+          {g.joinRequests.length === 0 ? (
+            <Empty icon={UserPlus} text={gs.noRequests} />
+          ) : (
+            <div className="stack-sm">
+              {g.joinRequests.map((r) => {
+                const ru = store.userById(d, r.userId);
+                return (
+                  <div key={r.userId} className="member-row" style={{ background: 'var(--bg)' }}>
+                    <Avatar name={ru?.name} size={34} />
+                    <div className="member-main">
+                      <div className="member-name">{ru?.name}</div>
+                      <div className="member-sub member-contact">
+                        {ru?.email}{ru?.phone ? ` · ${ru.phone}` : ''}
+                      </div>
+                    </div>
+                    <Btn size="sm" disabled={full} onClick={() => store.approveRequest(g.id, r.userId)}>{gs.approve}</Btn>
+                    <Btn size="sm" variant="danger" onClick={() => store.rejectRequest(g.id, r.userId)}>{gs.reject}</Btn>
                   </div>
-                  <Btn size="sm" disabled={full} onClick={() => store.approveRequest(g.id, r.userId)}>{gs.approve}</Btn>
-                  <Btn size="sm" variant="danger" onClick={() => store.rejectRequest(g.id, r.userId)}>{gs.reject}</Btn>
-                </div>
-              );
-            })}
-            {full && <div style={{ fontSize:12, color:C.red }}>{gs.errFull}</div>}
-          </div>
-        )}
+                );
+              })}
+              {full && <ErrorBox>{gs.errFull}</ErrorBox>}
+            </div>
+          )}
+        </div>
       </Card>
 
       <Card>
-        <SectionTitle><Settings2 size={13} style={{ verticalAlign:-2 }} /> {gs.manageTitle}</SectionTitle>
-        {msg && (
-          <div style={{ padding:'10px 14px', borderRadius:10, fontSize:13, marginBottom:14,
-            background: msg.ok ? C.primaryLight : C.redLight,
-            border: `1px solid ${msg.ok ? C.primaryBorder : C.redBorder}`,
-            color: msg.ok ? C.primaryDark : C.red }}>
-            {msg.text}
-          </div>
-        )}
-        <form onSubmit={save}>
+        <form onSubmit={save} className="stack" style={{ gap: 14 }}>
+          <SectionTitle><Settings2 size={13} /> {gs.manageTitle}</SectionTitle>
+          {msg && (msg.ok ? <InfoBox>{msg.text}</InfoBox> : <ErrorBox>{msg.text}</ErrorBox>)}
           <Field label={s.create.name}><Input value={form.name} onChange={set('name')} /></Field>
           <Field label={s.create.desc}>
-            <textarea value={form.description} onChange={set('description')} rows={2} style={{ ...inputStyle, resize:'vertical' }} />
+            <textarea className="input" value={form.description} onChange={set('description')} rows={2} />
           </Field>
-          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:12 }}>
-            <Field label={s.create.amount}><Input type="number" min="1" value={form.amount} onChange={set('amount')} dir="ltr" /></Field>
-            <Field label={s.create.maxMembers}><Input type="number" min="2" max="36" value={form.maxMembers} onChange={set('maxMembers')} dir="ltr" /></Field>
-            <Field label={s.create.startMonth}><Input type="month" value={form.startMonth} onChange={set('startMonth')} dir="ltr" /></Field>
+          <div className="form-row form-row-3">
+            <Field label={s.create.amount}>
+              <Input type="number" min="1" value={form.amount} onChange={set('amount')} dir="ltr" inputMode="numeric" />
+            </Field>
+            <Field label={s.create.maxMembers}>
+              <Input type="number" min="2" max="36" value={form.maxMembers} onChange={set('maxMembers')} dir="ltr" inputMode="numeric" />
+            </Field>
+            <Field label={s.create.startMonth}>
+              <Input type="month" value={form.startMonth} onChange={set('startMonth')} dir="ltr" />
+            </Field>
           </div>
-          <Btn type="submit" style={{ marginTop:4 }}>{gs.save}</Btn>
+          <div><Btn type="submit">{gs.save}</Btn></div>
         </form>
       </Card>
 
-      <Card style={{ border:`1px solid ${C.redBorder}` }}>
-        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:12, flexWrap:'wrap' }}>
-          <div style={{ fontSize:13, color:C.muted }}>{gs.deleteConfirm}</div>
-          <Btn variant="danger" onClick={() => {
-            if (window.confirm(gs.deleteConfirm)) { store.deleteGroup(g.id); onDeleted(); }
-          }}>
-            <Trash2 size={13} style={{ verticalAlign:-2 }} /> {gs.deleteGroup}
+      <Card className="card-danger-outline">
+        <div className="head-row">
+          <span className="field-hint" style={{ maxWidth: 420 }}>{gs.deleteConfirm}</span>
+          <Btn variant="danger" onClick={() => setConfirmingDelete(true)}>
+            <Trash2 size={14} /> {gs.deleteGroup}
           </Btn>
         </div>
       </Card>
+
+      <ConfirmDialog
+        open={confirmingDelete}
+        danger
+        title={gs.deleteGroup}
+        body={gs.deleteConfirm}
+        confirmLabel={s.common.confirm}
+        cancelLabel={s.common.cancel}
+        onConfirm={() => { store.deleteGroup(g.id); setConfirmingDelete(false); onDeleted(); }}
+        onCancel={() => setConfirmingDelete(false)}
+      />
     </div>
   );
 }
@@ -409,17 +436,21 @@ export default function GroupDetail({ db, groupId, user, s, lang, onBack }) {
   const spotsLeft = g.maxMembers - g.members.length;
 
   const tabs = [
-    { id:'schedule', label:gs.tabs.schedule, Icon:CalendarDays },
-    { id:'payments', label:gs.tabs.payments, Icon:Wallet, memberOnly:true },
-    { id:'members', label:gs.tabs.members, Icon:Users },
-    ...(admin ? [{ id:'manage', label:`${gs.tabs.manage}${g.joinRequests.length ? ` (${g.joinRequests.length})` : ''}`, Icon:Settings2 }] : []),
+    { id: 'schedule', label: gs.tabs.schedule, Icon: CalendarDays },
+    { id: 'payments', label: gs.tabs.payments, Icon: Wallet, memberOnly: true },
+    { id: 'members', label: gs.tabs.members, Icon: Users },
+    ...(admin ? [{
+      id: 'manage',
+      label: `${gs.tabs.manage}${g.joinRequests.length ? ` (${g.joinRequests.length})` : ''}`,
+      Icon: Settings2,
+    }] : []),
   ].filter((tb) => !tb.memberOnly || member);
 
   return (
-    <div style={{ maxWidth:760, margin:'0 auto', padding:'24px 20px', display:'flex', flexDirection:'column', gap:16 }}>
+    <div className="page stack">
       <div>
         <Btn variant="ghost" size="sm" onClick={onBack}>
-          <ArrowLeft size={13} style={{ verticalAlign:-2, transform:s.dir==='rtl'?'scaleX(-1)':'none' }} /> {s.common.back}
+          <ArrowLeft size={14} style={{ transform: s.dir === 'rtl' ? 'scaleX(-1)' : 'none' }} /> {s.common.back}
         </Btn>
       </div>
 
@@ -427,21 +458,19 @@ export default function GroupDetail({ db, groupId, user, s, lang, onBack }) {
 
       {/* Join banner for non-members */}
       {!member && (
-        <Card style={{ background:C.goldLight, border:`1.5px solid ${C.goldBorder}` }}>
-          <div style={{ display:'flex', alignItems:'center', gap:14, flexWrap:'wrap' }}>
-            <HandCoins size={22} color={C.gold} style={{ flexShrink:0 }} />
-            <div style={{ flex:1, minWidth:200 }}>
-              <div style={{ fontSize:14, fontWeight:700, color:C.ink }}>
-                {requested ? gs.requested : gs.notMember}
-              </div>
-              <div style={{ fontSize:12, color:C.muted, marginTop:3 }}>
+        <Card className="card-gold">
+          <div className="banner" style={{ padding: 0 }}>
+            <HandCoins size={22} style={{ color: 'var(--gold)', flexShrink: 0 }} />
+            <div className="banner-main">
+              <div className="banner-title">{requested ? gs.requested : gs.notMember}</div>
+              <div className="banner-sub">
                 {gs.joinHint}{!full && !requested ? ` · ${t(gs.spotsLeft, { n: spotsLeft })}` : ''}
               </div>
             </div>
             {requested ? (
               <Btn variant="secondary" onClick={() => store.cancelRequest(g.id, user.id)}>{s.common.cancel}</Btn>
             ) : full ? (
-              <Badge color={C.muted} bg={C.surfaceAlt} border={C.border}>{s.dash.full}</Badge>
+              <Badge variant="muted">{s.dash.full}</Badge>
             ) : (
               <Btn variant="gold" onClick={() => store.requestJoin(g.id, user.id)}>{gs.join}</Btn>
             )}
@@ -449,16 +478,15 @@ export default function GroupDetail({ db, groupId, user, s, lang, onBack }) {
         </Card>
       )}
 
-      {/* Month picker: member without a month, or member changing month while forming */}
+      {/* Month picker: member without a month, or changing month while forming */}
       {member && (!member.month || changingMonth) && (
-        <MonthPicker g={g} user={user} s={s} lang={lang} onPicked={() => setChangingMonth(false)} />
+        <MonthPicker g={g} user={user} s={s} onPicked={() => setChangingMonth(false)} />
       )}
       {member && member.month && !changingMonth && (
-        <div style={{ display:'flex', alignItems:'center', gap:10, padding:'12px 16px',
-          background:C.goldLight, border:`1px solid ${C.goldBorder}`, borderRadius:12 }}>
-          <Hourglass size={15} color={C.gold} />
-          <div style={{ flex:1, fontSize:13, fontWeight:700, color:C.ink }}>
-            {gs.yourMonthIs} {monthLabel(member.month, s.locale)}
+        <div className="banner banner-gold">
+          <Hourglass size={15} style={{ color: 'var(--gold)', flexShrink: 0 }} />
+          <div className="banner-main">
+            <span className="banner-title">{gs.yourMonthIs} {monthLabel(member.month, s.locale)}</span>
           </div>
           {store.groupStatus(g) === 'forming' && (
             <Btn size="sm" variant="secondary" onClick={() => setChangingMonth(true)}>{gs.changeMonth}</Btn>
@@ -467,13 +495,16 @@ export default function GroupDetail({ db, groupId, user, s, lang, onBack }) {
       )}
 
       {/* Tabs */}
-      <div style={{ display:'flex', gap:6, borderBottom:`1.5px solid ${C.border}`, paddingBottom:0, flexWrap:'wrap' }}>
+      <div className="tabs" role="tablist">
         {tabs.map(({ id, label, Icon }) => (
-          <button key={id} onClick={() => setTab(id)}
-            style={{ display:'flex', alignItems:'center', gap:6, padding:'9px 15px', border:'none',
-              background:'transparent', cursor:'pointer', fontFamily:font.body, fontSize:13,
-              fontWeight: tab === id ? 800 : 600, color: tab === id ? C.primary : C.muted,
-              borderBottom: `2.5px solid ${tab === id ? C.primary : 'transparent'}`, marginBottom:-1.5 }}>
+          <button
+            key={id}
+            type="button"
+            role="tab"
+            aria-selected={tab === id}
+            className={`tab${tab === id ? ' is-active' : ''}`}
+            onClick={() => setTab(id)}
+          >
             <Icon size={14} /> {label}
           </button>
         ))}
@@ -482,7 +513,7 @@ export default function GroupDetail({ db, groupId, user, s, lang, onBack }) {
       {tab === 'schedule' && <ScheduleTab g={g} user={user} s={s} lang={lang} />}
       {tab === 'payments' && member && <PaymentsTab g={g} user={user} s={s} lang={lang} admin={admin} />}
       {tab === 'members' && <MembersTab g={g} user={user} s={s} admin={admin} onLeft={onBack} />}
-      {tab === 'manage' && admin && <ManageTab g={g} s={s} lang={lang} onDeleted={onBack} />}
+      {tab === 'manage' && admin && <ManageTab g={g} s={s} onDeleted={onBack} />}
     </div>
   );
 }
