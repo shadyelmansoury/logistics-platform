@@ -283,7 +283,10 @@ export async function createGroup({ name, description, amount, currency, maxMemb
     admin_id: adminId,
   }).select().single();
   if (error) throw new Error(error.message);
-  await run(sb.from('group_members').insert({ group_id: data.id, user_id: adminId }));
+  const { error: memberError } = await sb.from('group_members').insert({ group_id: data.id, user_id: adminId });
+  if (memberError) console.error('Gam3ya: admin membership insert failed:', memberError.message);
+  // Await the refresh so the caller can navigate straight to the new group
+  await refresh();
   return { id: data.id };
 }
 

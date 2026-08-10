@@ -438,8 +438,14 @@ export default function GroupDetail({ db, groupId, user, s, lang, onBack }) {
 
   // The group can disappear underneath us (deleted on another device and
   // synced via realtime) — navigate home instead of rendering nothing.
-  useEffect(() => { if (!g) onBack(); }, [g]);
-  if (!g) return null;
+  // Grace period: right after a mutation the cache may briefly lack the
+  // group while a refresh is in flight, so don't bounce immediately.
+  useEffect(() => {
+    if (g) return undefined;
+    const t = setTimeout(onBack, 2500);
+    return () => clearTimeout(t);
+  }, [g]);
+  if (!g) return <div className="loading-screen">{s.common.loading}</div>;
 
   const member = store.memberOf(g, user.id);
   const admin = store.isAdmin(g, user.id);
