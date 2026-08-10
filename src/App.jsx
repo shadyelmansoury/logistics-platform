@@ -56,7 +56,11 @@ export default function App() {
       </nav>
 
       {/* Content */}
-      {!user ? (
+      {db.loading ? (
+        <div style={{ padding:'80px 20px', textAlign:'center', color:C.muted, fontSize:14 }}>
+          {s.common.loading}
+        </div>
+      ) : !user ? (
         <Auth s={s} />
       ) : view.name === 'create' ? (
         <CreateGroup user={user} s={s} lang={lang} onDone={openGroup} onBack={goHome} />
@@ -69,6 +73,7 @@ export default function App() {
 
       <footer style={{ textAlign: 'center', padding: '30px 20px', fontSize: 11, color: C.mutedLight }}>
         {s.appName} · {s.appNameAr} — {s.tagline}
+        {store.backend === 'local' && <div style={{ marginTop: 6 }}>{s.common.demoMode}</div>}
       </footer>
     </div>
   );

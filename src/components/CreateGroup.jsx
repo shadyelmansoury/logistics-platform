@@ -26,15 +26,19 @@ export default function CreateGroup({ user, s, lang, onDone, onBack }) {
     ? t(c.hint, { n, total: fmtMoney(amount * (n - 1), form.currency, lang) })
     : null;
 
-  const submit = (e) => {
+  const submit = async (e) => {
     e.preventDefault();
     setError('');
     if (!form.name.trim()) return setError(s.auth.errRequired);
     if (!amount || amount <= 0) return setError(c.errAmount);
     if (!n || n < 2 || n > 36) return setError(c.errMax);
     if (!/^\d{4}-\d{2}$/.test(form.startMonth)) return setError(c.errStart);
-    const g = store.createGroup({ ...form, adminId: user.id });
-    onDone(g.id);
+    try {
+      const g = await store.createGroup({ ...form, adminId: user.id });
+      onDone(g.id);
+    } catch {
+      setError(s.auth.errGeneric);
+    }
   };
 
   return (

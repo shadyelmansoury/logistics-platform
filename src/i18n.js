@@ -22,6 +22,8 @@ export const S = {
       errInvalid: 'Incorrect email or password',
       errPassShort: 'Password must be at least 6 characters',
       errPassMatch: 'Passwords do not match',
+      errGeneric: 'Something went wrong. Please try again.',
+      confirmSent: 'Almost there! Check your email and click the confirmation link, then log in.',
     },
     nav: { newGroup: 'New Group', logout: 'Log out' },
     dash: {
@@ -85,7 +87,11 @@ export const S = {
       spotsLeft: '{n} spots left',
       potNote: 'Pot per turn = monthly amount × (members − 1), since the receiver doesn’t pay themselves.',
     },
-    common: { cancel: 'Cancel', close: 'Close', back: 'Back' },
+    common: {
+      cancel: 'Cancel', close: 'Close', back: 'Back',
+      loading: 'Loading…',
+      demoMode: 'Demo mode — data is stored in this browser only',
+    },
     currencies: { EGP: 'EGP', USD: 'USD', EUR: 'EUR', SAR: 'SAR', AED: 'AED' },
   },
 
@@ -111,6 +117,8 @@ export const S = {
       errInvalid: 'البريد الإلكتروني أو كلمة السر غير صحيحة',
       errPassShort: 'كلمة السر لازم تكون 6 حروف على الأقل',
       errPassMatch: 'كلمتا السر غير متطابقتين',
+      errGeneric: 'حصلت مشكلة. حاول تاني.',
+      confirmSent: 'خطوة أخيرة! افتح بريدك الإلكتروني ودوس على لينك التأكيد، وبعدين سجّل دخولك.',
     },
     nav: { newGroup: 'جمعية جديدة', logout: 'تسجيل الخروج' },
     dash: {
@@ -174,7 +182,11 @@ export const S = {
       spotsLeft: 'فاضل {n} أماكن',
       potNote: 'قيمة الدور = المبلغ الشهري × (عدد الأعضاء − 1)، لأن اللي بيقبض مش بيدفع لنفسه.',
     },
-    common: { cancel: 'إلغاء', close: 'إغلاق', back: 'رجوع' },
+    common: {
+      cancel: 'إلغاء', close: 'إغلاق', back: 'رجوع',
+      loading: 'جاري التحميل…',
+      demoMode: 'وضع تجريبي — البيانات محفوظة في المتصفح ده بس',
+    },
     currencies: { EGP: 'ج.م', USD: 'دولار', EUR: 'يورو', SAR: 'ر.س', AED: 'د.إ' },
   },
 };

@@ -8,6 +8,7 @@ export default function Auth({ s }) {
   const [mode, setMode] = useState('login');
   const [form, setForm] = useState({ name:'', email:'', phone:'', password:'', confirm:'' });
   const [error, setError] = useState('');
+  const [info, setInfo] = useState('');
   const [busy, setBusy] = useState(false);
   const a = s.auth;
 
@@ -24,12 +25,24 @@ export default function Auth({ s }) {
     } else if (!form.email.trim() || !form.password) {
       return setError(a.errRequired);
     }
+    setInfo('');
     setBusy(true);
     try {
-      if (mode === 'register') await store.register(form);
-      else await store.login(form.email, form.password);
+      if (mode === 'register') {
+        const res = await store.register(form);
+        if (res?.needsConfirmation) {
+          setInfo(a.confirmSent);
+          setMode('login');
+        }
+      } else {
+        await store.login(form.email, form.password);
+      }
     } catch (err) {
-      setError(err.message === 'emailTaken' ? a.errEmailTaken : a.errInvalid);
+      setError(
+        err.message === 'emailTaken' ? a.errEmailTaken
+        : err.message === 'invalidCreds' ? a.errInvalid
+        : mode === 'login' ? a.errInvalid : a.errGeneric,
+      );
     } finally {
       setBusy(false);
     }
@@ -58,6 +71,12 @@ export default function Auth({ s }) {
           </div>
           <div style={{ fontSize:12, color:C.muted, marginBottom:18 }}>{a.welcome}</div>
           <ErrorBox>{error}</ErrorBox>
+          {info && (
+            <div style={{ padding:'10px 14px', background:C.primaryLight, border:`1px solid ${C.primaryBorder}`,
+              borderRadius:10, color:C.primaryDark, fontSize:13, marginBottom:14, lineHeight:1.6 }}>
+              {info}
+            </div>
+          )}
           <form onSubmit={submit}>
             {mode === 'register' && (
               <>

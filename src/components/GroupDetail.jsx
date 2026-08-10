@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   ArrowLeft, Crown, Users, CalendarDays, Wallet, Settings2,
   CheckCircle2, Circle, Hourglass, UserPlus, Trash2, LogOut, HandCoins,
@@ -397,7 +397,10 @@ export default function GroupDetail({ db, groupId, user, s, lang, onBack }) {
   const g = store.groupById(db, groupId);
   const gs = s.group;
 
-  if (!g) { onBack(); return null; }
+  // The group can disappear underneath us (deleted on another device and
+  // synced via realtime) — navigate home instead of rendering nothing.
+  useEffect(() => { if (!g) onBack(); }, [g]);
+  if (!g) return null;
 
   const member = store.memberOf(g, user.id);
   const admin = store.isAdmin(g, user.id);
