@@ -13,7 +13,8 @@ export const hasSupabase = Boolean(url && anonKey);
 
 const sb = hasSupabase ? createClient(url, anonKey) : null;
 
-let db = { users: [], groups: [], session: null, loading: true };
+let db = { users: [], groups: [], session: null, loading: true, mfaPending: false };
+let mfaPendingFactorId = null;
 let listeners = [];
 
 const notify = () => listeners.forEach((l) => l());
@@ -30,7 +31,7 @@ const ts = (iso) => (iso ? new Date(iso).getTime() : null);
 
 async function refresh() {
   if (!db.session) {
-    db = { users: [], groups: [], session: null, loading: false };
+    db = { ...db, users: [], groups: [], session: null, loading: false };
     notify();
     return;
   }
@@ -50,7 +51,14 @@ async function refresh() {
   }
 
   const users = (profiles.data || []).map((p) => ({
-    id: p.id, name: p.name, email: p.email, phone: p.phone, createdAt: ts(p.created_at),
+    id: p.id,
+    name: p.name || `${p.first_name || ''} ${p.last_name || ''}`.trim(),
+    firstName: p.first_name,
+    lastName: p.last_name,
+    email: p.email,
+    phone: p.phone,
+    etransferEmail: p.etransfer_email,
+    createdAt: ts(p.created_at),
   }));
 
   const membersByGroup = {};
@@ -84,7 +92,7 @@ async function refresh() {
     payments: paymentsByGroup[g.id] || {},
   }));
 
-  db = { users, groups: shaped, session: db.session, loading: false };
+  db = { ...db, users, groups: shaped, loading: false };
   notify();
 }
 
@@ -105,17 +113,37 @@ async function run(promise) {
 
 // ─── Init: session restore + realtime ────────────────────────────────────────
 
-export async function init() {
+// A user with an enrolled 2FA factor holds only an "aal1" session after the
+// password step; the app must not treat them as signed in until the TOTP
+// code upgrades the session to "aal2".
+async function evaluateSession() {
   const { data: { session } } = await sb.auth.getSession();
-  db = { ...db, session: session?.user?.id || null };
+  if (!session) {
+    db = { ...db, session: null, mfaPending: false };
+    return;
+  }
+  const { data: aal } = await sb.auth.mfa.getAuthenticatorAssuranceLevel();
+  if (aal && aal.nextLevel === 'aal2' && aal.currentLevel !== 'aal2') {
+    const { data: lf } = await sb.auth.mfa.listFactors();
+    mfaPendingFactorId = lf?.totp?.find((f) => f.status === 'verified')?.id || null;
+    db = { ...db, session: null, mfaPending: true };
+  } else {
+    db = { ...db, session: session.user.id, mfaPending: false };
+  }
+}
+
+export async function init() {
+  await evaluateSession();
   await refresh();
 
-  sb.auth.onAuthStateChange((_event, newSession) => {
-    const id = newSession?.user?.id || null;
-    if (id !== db.session) {
-      db = { ...db, session: id };
+  sb.auth.onAuthStateChange((event) => {
+    if (event === 'SIGNED_OUT') {
+      db = { ...db, session: null, mfaPending: false };
       scheduleRefresh();
+      return;
     }
+    // Re-evaluate on sign-in / token refresh / MFA verification
+    evaluateSession().then(() => scheduleRefresh()).catch((e) => console.error(e));
   });
 
   sb.channel('gameea-db')
@@ -127,12 +155,18 @@ export async function init() {
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────
 
-export async function register({ name, email, phone, password }) {
+export async function register({ firstName, lastName, email, phone, etransferEmail, password }) {
+  const normEmail = email.trim().toLowerCase();
   const { data, error } = await sb.auth.signUp({
-    email: email.trim().toLowerCase(),
+    email: normEmail,
     password,
     options: {
-      data: { name: name.trim(), phone: phone.trim() },
+      data: {
+        first_name: firstName.trim(),
+        last_name: lastName.trim(),
+        phone: phone.trim(),
+        etransfer_email: (etransferEmail || normEmail).trim().toLowerCase(),
+      },
       emailRedirectTo: window.location.origin,
     },
   });
@@ -144,7 +178,7 @@ export async function register({ name, email, phone, password }) {
   // identities for an email that already has an account.
   if (data.user && data.user.identities?.length === 0) throw new Error('emailTaken');
   if (data.session) {
-    db = { ...db, session: data.user.id };
+    db = { ...db, session: data.user.id, mfaPending: false };
     await refresh();
     return { user: data.user, needsConfirmation: false };
   }
@@ -157,15 +191,83 @@ export async function login(email, password) {
     password,
   });
   if (error) throw new Error('invalidCreds');
-  db = { ...db, session: data.user.id };
+  await evaluateSession();
+  if (db.mfaPending) {
+    notify();
+    return { mfaRequired: true };
+  }
   await refresh();
-  return data.user;
+  return { user: data.user };
+}
+
+// Second step of login for accounts with 2FA enabled.
+export async function completeMfaLogin(code) {
+  if (!mfaPendingFactorId) {
+    const { data: lf } = await sb.auth.mfa.listFactors();
+    mfaPendingFactorId = lf?.totp?.find((f) => f.status === 'verified')?.id || null;
+  }
+  await mfaChallengeVerify(mfaPendingFactorId, code);
+  await evaluateSession();
+  await refresh();
 }
 
 export function logout() {
   sb.auth.signOut().catch((e) => console.error(e));
-  db = { users: [], groups: [], session: null, loading: false };
+  mfaPendingFactorId = null;
+  db = { ...db, users: [], groups: [], session: null, loading: false, mfaPending: false };
   notify();
+}
+
+// ─── Profile ──────────────────────────────────────────────────────────────────
+
+export function updateProfile(userId, patch) {
+  const name = `${patch.firstName || ''} ${patch.lastName || ''}`.trim();
+  run(sb.from('profiles').update({
+    first_name: patch.firstName,
+    last_name: patch.lastName,
+    phone: patch.phone,
+    etransfer_email: (patch.etransferEmail || '').trim().toLowerCase(),
+    ...(name ? { name } : {}),
+  }).eq('id', userId)).catch(() => {});
+}
+
+// ─── Two-factor authentication (TOTP) ─────────────────────────────────────────
+
+async function mfaChallengeVerify(factorId, code) {
+  if (!factorId) throw new Error('badCode');
+  const { data: challenge, error: e1 } = await sb.auth.mfa.challenge({ factorId });
+  if (e1) throw new Error(e1.message);
+  const { error: e2 } = await sb.auth.mfa.verify({ factorId, challengeId: challenge.id, code });
+  if (e2) throw new Error('badCode');
+}
+
+export async function mfaStatus() {
+  const { data, error } = await sb.auth.mfa.listFactors();
+  if (error) throw new Error(error.message);
+  const factor = data?.totp?.find((f) => f.status === 'verified') || null;
+  return { enabled: Boolean(factor), factorId: factor?.id || null };
+}
+
+export async function mfaEnroll() {
+  // Clear abandoned unverified enrollments so re-tries don't pile up
+  const { data: lf } = await sb.auth.mfa.listFactors();
+  for (const f of lf?.all || []) {
+    if (f.status === 'unverified') {
+      await sb.auth.mfa.unenroll({ factorId: f.id }).catch(() => {});
+    }
+  }
+  const { data, error } = await sb.auth.mfa.enroll({ factorType: 'totp', friendlyName: 'Gam3ya' });
+  if (error) throw new Error(error.message);
+  return { factorId: data.id, qr: data.totp.qr_code, secret: data.totp.secret };
+}
+
+export async function mfaVerifyEnroll(factorId, code) {
+  await mfaChallengeVerify(factorId, code);
+}
+
+export async function mfaUnenroll(factorId) {
+  const { error } = await sb.auth.mfa.unenroll({ factorId });
+  if (error) throw new Error(error.message);
 }
 
 // ─── Group mutations ──────────────────────────────────────────────────────────

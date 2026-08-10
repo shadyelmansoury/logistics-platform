@@ -8,8 +8,13 @@ create extension if not exists pgcrypto;
 create table public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   name text not null default '',
+  first_name text not null default '',
+  last_name text not null default '',
   email text not null default '',
   phone text not null default '',
+  -- The email linked to the member's bank account for e-transfers:
+  -- payers send the monthly amount to this address.
+  etransfer_email text not null default '',
   created_at timestamptz not null default now()
 );
 
@@ -59,12 +64,16 @@ returns trigger
 language plpgsql security definer set search_path = public
 as $$
 begin
-  insert into public.profiles (id, name, email, phone)
+  insert into public.profiles (id, name, first_name, last_name, email, phone, etransfer_email)
   values (
     new.id,
-    coalesce(new.raw_user_meta_data->>'name', ''),
+    trim(coalesce(new.raw_user_meta_data->>'first_name', '') || ' ' ||
+         coalesce(new.raw_user_meta_data->>'last_name', '')),
+    coalesce(new.raw_user_meta_data->>'first_name', ''),
+    coalesce(new.raw_user_meta_data->>'last_name', ''),
     coalesce(new.email, ''),
-    coalesce(new.raw_user_meta_data->>'phone', '')
+    coalesce(new.raw_user_meta_data->>'phone', ''),
+    coalesce(new.raw_user_meta_data->>'etransfer_email', coalesce(new.email, ''))
   );
   return new;
 end;
@@ -158,6 +167,33 @@ create policy "payments_insert" on public.payments
   for insert to authenticated with check (payer_id = auth.uid() or public.is_group_admin(group_id));
 create policy "payments_delete" on public.payments
   for delete to authenticated using (payer_id = auth.uid() or public.is_group_admin(group_id));
+
+-- ─── Two-factor authentication enforcement ────────────────────────────────────
+-- A user who has enrolled a verified TOTP factor must complete the 2FA
+-- challenge (aal2) before any data is readable or writable — the second
+-- factor protects the data itself, not just the login screen.
+
+create or replace function public.mfa_ok()
+returns boolean
+language sql stable security definer set search_path = public
+as $$
+  select coalesce((select auth.jwt()->>'aal') = 'aal2', false)
+      or not exists (
+        select 1 from auth.mfa_factors
+        where user_id = auth.uid() and status = 'verified'
+      );
+$$;
+
+create policy "mfa_profiles" on public.profiles
+  as restrictive for all to authenticated using (public.mfa_ok());
+create policy "mfa_groups" on public.groups
+  as restrictive for all to authenticated using (public.mfa_ok());
+create policy "mfa_group_members" on public.group_members
+  as restrictive for all to authenticated using (public.mfa_ok());
+create policy "mfa_join_requests" on public.join_requests
+  as restrictive for all to authenticated using (public.mfa_ok());
+create policy "mfa_payments" on public.payments
+  as restrictive for all to authenticated using (public.mfa_ok());
 
 -- ─── Realtime: push table changes to connected clients ────────────────────────
 

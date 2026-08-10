@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import {
   ArrowLeft, Crown, Users, CalendarDays, Wallet, Settings2, ChevronDown,
-  CheckCircle2, Circle, Hourglass, UserPlus, Trash2, LogOut, HandCoins,
+  CheckCircle2, Circle, Hourglass, UserPlus, Trash2, LogOut, HandCoins, Landmark,
 } from 'lucide-react';
 import {
   Card, Btn, Badge, SectionTitle, Avatar, Empty, Field, Input, ErrorBox, InfoBox, ConfirmDialog,
@@ -209,6 +209,13 @@ function PaymentsTab({ g, user, s, lang, admin }) {
             )}
             {isOpen && owner && (
               <div className="pay-body">
+                {(ownerUser?.etransferEmail || ownerUser?.email) && (
+                  <div className="send-to">
+                    <Landmark size={14} />
+                    <span>{gs.sendTo}:</span>
+                    <bdi>{ownerUser.etransferEmail || ownerUser.email}</bdi>
+                  </div>
+                )}
                 {payers.map((p) => {
                   const pu = store.userById(d, p.userId);
                   const paidAt = g.payments[m]?.[p.userId];
@@ -281,6 +288,11 @@ function MembersTab({ g, user, s, admin, onLeft }) {
               <div className="member-sub">
                 {m.month ? `${gs.monthOf}: ${monthLabel(m.month, s.locale)}` : gs.noMonth}
               </div>
+              {(mu?.phone || mu?.etransferEmail) && (
+                <div className="member-sub member-contact">
+                  {[mu.phone, mu.etransferEmail].filter(Boolean).join(' · ')}
+                </div>
+              )}
             </div>
             {admin && !isGroupAdmin && (
               <Btn size="sm" variant="danger" onClick={() => setConfirming({ type: 'remove', userId: m.userId })}>

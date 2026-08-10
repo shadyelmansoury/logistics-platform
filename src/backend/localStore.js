@@ -48,14 +48,17 @@ async function hashPassword(password) {
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────
 
-export async function register({ name, email, phone, password }) {
+export async function register({ firstName, lastName, email, phone, etransferEmail, password }) {
   const normEmail = email.trim().toLowerCase();
   if (db.users.some((u) => u.email === normEmail)) throw new Error('emailTaken');
   const user = {
     id: uid(),
-    name: name.trim(),
+    firstName: firstName.trim(),
+    lastName: lastName.trim(),
+    name: `${firstName.trim()} ${lastName.trim()}`.trim(),
     email: normEmail,
     phone: phone.trim(),
+    etransferEmail: (etransferEmail || normEmail).trim().toLowerCase(),
     passwordHash: await hashPassword(password),
     createdAt: Date.now(),
   };
@@ -63,6 +66,16 @@ export async function register({ name, email, phone, password }) {
   db.session = user.id;
   commit();
   return { user, needsConfirmation: false };
+}
+
+export function updateProfile(userId, patch) {
+  db.users = db.users.map((u) => {
+    if (u.id !== userId) return u;
+    const next = { ...u, ...patch };
+    next.name = `${next.firstName || ''} ${next.lastName || ''}`.trim() || next.name;
+    return next;
+  });
+  commit();
 }
 
 export async function login(email, password) {
@@ -79,6 +92,14 @@ export function logout() {
   db.session = null;
   commit();
 }
+
+// Two-factor authentication needs the live backend; these stubs keep the
+// shared facade safe to call in demo mode.
+export async function mfaStatus() { return { enabled: false, factorId: null }; }
+export async function mfaEnroll() { throw new Error('unavailable'); }
+export async function mfaVerifyEnroll() { throw new Error('unavailable'); }
+export async function mfaUnenroll() { throw new Error('unavailable'); }
+export async function completeMfaLogin() { throw new Error('unavailable'); }
 
 // ─── Group mutations ──────────────────────────────────────────────────────────
 

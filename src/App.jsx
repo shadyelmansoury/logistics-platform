@@ -3,9 +3,11 @@ import { Languages, LogOut, Sun, Moon } from 'lucide-react';
 import { S } from './i18n.js';
 import * as store from './store.js';
 import Auth from './components/Auth.jsx';
+import MfaGate from './components/MfaGate.jsx';
 import Dashboard from './components/Dashboard.jsx';
 import CreateGroup from './components/CreateGroup.jsx';
 import GroupDetail from './components/GroupDetail.jsx';
+import Account from './components/Account.jsx';
 import { Avatar, Logo } from './components/ui.jsx';
 
 const LANG_KEY = 'gam3ya_lang';
@@ -73,10 +75,15 @@ export default function App() {
           </button>
           {user && (
             <>
-              <span className="nav-user">
+              <button
+                className="icon-btn nav-user"
+                onClick={() => setView({ name: 'account' })}
+                aria-label={s.nav.account}
+                title={s.nav.account}
+              >
                 <Avatar name={user.name} size={30} />
                 <span className="nav-user-name">{user.name}</span>
-              </span>
+              </button>
               <button className="icon-btn" onClick={() => { store.logout(); goHome(); }} aria-label={s.nav.logout}>
                 <LogOut size={16} />
                 <span className="icon-btn-label">{s.nav.logout}</span>
@@ -88,8 +95,12 @@ export default function App() {
 
       {db.loading ? (
         <div className="loading-screen">{s.common.loading}</div>
+      ) : db.mfaPending ? (
+        <MfaGate s={s} />
       ) : !user ? (
         <Auth s={s} />
+      ) : view.name === 'account' ? (
+        <Account user={user} s={s} onBack={goHome} />
       ) : view.name === 'create' ? (
         <CreateGroup user={user} s={s} lang={lang} onDone={openGroup} onBack={goHome} />
       ) : view.name === 'group' ? (

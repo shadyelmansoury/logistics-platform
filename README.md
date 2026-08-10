@@ -17,7 +17,17 @@ The app has two backends behind the same code:
 
 ## Features
 
-- **Accounts** — register with name, email, and phone; log in / log out.
+- **Accounts** — register with first and last name, phone number, email, and a
+  dedicated **e-Transfer email** (the address linked to the member's bank
+  account — shown to payers so they know where to send each month's transfer;
+  defaults to the login email).
+- **Two-factor authentication (2FA)** — any user can enable TOTP 2FA
+  (Google Authenticator / Authy) from their profile's Security section; login
+  then requires the 6-digit code, and database policies block all data access
+  until the second factor is verified. Recommended for group admins. (Live
+  backend only.)
+- **Profile page** — members edit their names, phone, and e-transfer email;
+  admins reviewing join requests see the applicant's contact details.
 - **Create a group** — whoever creates a group becomes its **admin** and defines:
   - the fixed monthly amount and currency (EGP, USD, EUR, SAR, AED)
   - the **max number of members** (which equals the number of months the Gam3ya runs)
@@ -128,6 +138,13 @@ Security lives in the database (`supabase/schema.sql`), not just the UI:
 - A database trigger blocks joining beyond the admin's max-members limit.
 - Passwords and sessions are handled by Supabase Auth (email + password, with
   optional email confirmation).
+- 2FA is enforced in the database: a restrictive policy (`mfa_ok()`) denies all
+  reads and writes to a session that hasn't completed the TOTP challenge, for
+  any account with an enrolled factor.
+
+Already ran the original `schema.sql` before the 2FA/profile update? Run
+[`supabase/upgrade-002.sql`](supabase/upgrade-002.sql) once to add the new
+columns and policies — fresh installs only need `schema.sql`.
 
 ## Tech stack
 

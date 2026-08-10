@@ -24,6 +24,15 @@ export const getDB = () => impl.getDB();
 export const register = (form) => impl.register(form);
 export const login = (email, password) => impl.login(email, password);
 export const logout = () => impl.logout();
+export const updateProfile = (userId, patch) => impl.updateProfile(userId, patch);
+
+// Two-factor authentication — only available on the live backend.
+export const mfaAvailable = supa.hasSupabase;
+export const mfaStatus = () => impl.mfaStatus();
+export const mfaEnroll = () => impl.mfaEnroll();
+export const mfaVerifyEnroll = (factorId, code) => impl.mfaVerifyEnroll(factorId, code);
+export const mfaUnenroll = (factorId) => impl.mfaUnenroll(factorId);
+export const completeMfaLogin = (code) => impl.completeMfaLogin(code);
 
 export const createGroup = (data) => impl.createGroup(data);
 export const requestJoin = (groupId, userId) => impl.requestJoin(groupId, userId);

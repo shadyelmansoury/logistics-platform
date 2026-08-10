@@ -1,24 +1,33 @@
 import { useState } from 'react';
-import { HandCoins, Users, CalendarCheck } from 'lucide-react';
+import { HandCoins, Users, CalendarCheck, Landmark } from 'lucide-react';
 import { Card, Btn, Field, Input, ErrorBox, InfoBox, Logo } from './ui.jsx';
 import * as store from '../store.js';
 
 export default function Auth({ s }) {
   const [mode, setMode] = useState('login');
-  const [form, setForm] = useState({ name: '', email: '', phone: '', password: '', confirm: '' });
+  const [form, setForm] = useState({
+    firstName: '', lastName: '', email: '', phone: '',
+    etransferEmail: '', sameEtransfer: true,
+    password: '', confirm: '',
+  });
   const [error, setError] = useState('');
   const [info, setInfo] = useState('');
   const [busy, setBusy] = useState(false);
   const a = s.auth;
 
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
+  const isEmail = (v) => /^\S+@\S+\.\S+$/.test(v.trim());
 
   const submit = async (e) => {
     e.preventDefault();
     setError('');
     if (mode === 'register') {
-      if (!form.name.trim() || !form.email.trim() || !form.password) return setError(a.errRequired);
-      if (!/^\S+@\S+\.\S+$/.test(form.email.trim())) return setError(a.errEmail);
+      if (!form.firstName.trim() || !form.lastName.trim() || !form.email.trim() || !form.password) {
+        return setError(a.errRequired);
+      }
+      if (!form.phone.trim()) return setError(a.errPhoneRequired);
+      if (!isEmail(form.email)) return setError(a.errEmail);
+      if (!form.sameEtransfer && !isEmail(form.etransferEmail)) return setError(a.errEmail);
       if (form.password.length < 6) return setError(a.errPassShort);
       if (form.password !== form.confirm) return setError(a.errPassMatch);
     } else if (!form.email.trim() || !form.password) {
@@ -28,7 +37,14 @@ export default function Auth({ s }) {
     setBusy(true);
     try {
       if (mode === 'register') {
-        const res = await store.register(form);
+        const res = await store.register({
+          firstName: form.firstName,
+          lastName: form.lastName,
+          email: form.email,
+          phone: form.phone,
+          etransferEmail: form.sameEtransfer ? form.email : form.etransferEmail,
+          password: form.password,
+        });
         if (res?.needsConfirmation) {
           setInfo(a.confirmSent);
           setMode('login');
@@ -52,6 +68,7 @@ export default function Auth({ s }) {
     { Icon: Users, text: isAr ? 'مجموعة من ناس تعرفهم وتثق فيهم' : 'A circle of people you know and trust' },
     { Icon: HandCoins, text: isAr ? 'مبلغ ثابت متفق عليه كل شهر' : 'A fixed agreed amount every month' },
     { Icon: CalendarCheck, text: isAr ? 'كل عضو يختار شهر قبضه بنفسه' : 'Each member picks their own payout month' },
+    { Icon: Landmark, text: isAr ? 'التحويلات على بريد حسابك البنكي مباشرة' : 'Money goes straight to your bank e-transfer email' },
   ];
 
   return (
@@ -78,11 +95,38 @@ export default function Auth({ s }) {
             <form onSubmit={submit} className="stack" style={{ gap: 14 }}>
               {mode === 'register' && (
                 <>
-                  <Field label={a.name}><Input value={form.name} onChange={set('name')} autoComplete="name" /></Field>
-                  <Field label={a.phone}><Input value={form.phone} onChange={set('phone')} autoComplete="tel" dir="ltr" inputMode="tel" /></Field>
+                  <div className="form-row form-row-2">
+                    <Field label={a.firstName}>
+                      <Input value={form.firstName} onChange={set('firstName')} autoComplete="given-name" />
+                    </Field>
+                    <Field label={a.lastName}>
+                      <Input value={form.lastName} onChange={set('lastName')} autoComplete="family-name" />
+                    </Field>
+                  </div>
+                  <Field label={a.phone}>
+                    <Input value={form.phone} onChange={set('phone')} autoComplete="tel" dir="ltr" inputMode="tel" />
+                  </Field>
                 </>
               )}
-              <Field label={a.email}><Input type="email" value={form.email} onChange={set('email')} autoComplete="email" dir="ltr" inputMode="email" /></Field>
+              <Field label={a.email}>
+                <Input type="email" value={form.email} onChange={set('email')} autoComplete="email" dir="ltr" inputMode="email" />
+              </Field>
+              {mode === 'register' && (
+                <Field label={a.etransferEmail} hint={a.etransferHint}>
+                  <label className="check-row">
+                    <input
+                      type="checkbox"
+                      checked={form.sameEtransfer}
+                      onChange={(e) => setForm({ ...form, sameEtransfer: e.target.checked })}
+                    />
+                    <span>{a.sameAsEmail}</span>
+                  </label>
+                  {!form.sameEtransfer && (
+                    <Input type="email" value={form.etransferEmail} onChange={set('etransferEmail')}
+                      dir="ltr" inputMode="email" style={{ marginTop: 6 }} />
+                  )}
+                </Field>
+              )}
               <Field label={a.password}>
                 <Input type="password" value={form.password} onChange={set('password')}
                   autoComplete={mode === 'login' ? 'current-password' : 'new-password'} dir="ltr" />
