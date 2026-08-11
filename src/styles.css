@@ -443,12 +443,15 @@ textarea.input { min-height: 0; resize: vertical; line-height: 1.5; }
 }
 .stat-value { font-size: 15.5px; font-weight: 700; color: var(--ink); font-variant-numeric: tabular-nums; }
 
-/* ─── Tabs ──────────────────────────────────────────────────────────────────── */
+/* ─── Tabs (segmented-control style) ────────────────────────────────────────── */
 
 .tabs {
   display: flex;
-  gap: 2px;
-  border-bottom: 1.5px solid var(--border);
+  gap: 4px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 4px;
   overflow-x: auto;
   scrollbar-width: none;
 }
@@ -456,21 +459,54 @@ textarea.input { min-height: 0; resize: vertical; line-height: 1.5; }
 .tab {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 7px;
-  padding: 11px 16px;
+  flex: 1;
+  padding: 9px 14px;
   border: none;
+  border-radius: 9px;
   background: transparent;
   cursor: pointer;
   font-size: 13.5px;
   font-weight: 600;
   color: var(--muted);
-  border-bottom: 2.5px solid transparent;
-  margin-bottom: -1.5px;
   white-space: nowrap;
-  transition: color 0.15s;
+  transition: color 0.15s, background-color 0.15s;
 }
 .tab:hover { color: var(--ink); }
-.tab.is-active { color: var(--primary); font-weight: 700; border-bottom-color: var(--primary); }
+.tab.is-active {
+  color: var(--primary);
+  font-weight: 700;
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+
+/* Generic segmented control (e.g. full/half share choice) */
+.segmented {
+  display: flex;
+  gap: 4px;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 11px;
+  padding: 4px;
+}
+.segment {
+  flex: 1;
+  padding: 9px 14px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  cursor: pointer;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--muted);
+  transition: color 0.15s, background-color 0.15s;
+}
+.segment.is-active {
+  background: var(--primary);
+  color: var(--primary-contrast);
+  font-weight: 700;
+}
 
 /* ─── Month picker ──────────────────────────────────────────────────────────── */
 
@@ -499,6 +535,8 @@ textarea.input { min-height: 0; resize: vertical; line-height: 1.5; }
 .month-cell:disabled .month-cell-owner { color: var(--muted); }
 .month-cell.is-mine { background: var(--gold-soft); border-color: var(--gold-border); }
 .month-cell.is-mine .month-cell-owner { color: var(--gold); }
+.month-cell.is-half { background: var(--info-soft); border-color: var(--info-border); }
+.month-cell.is-half .month-cell-owner { color: var(--info); }
 .month-cell.is-selected { background: var(--primary); border-color: var(--primary-strong); }
 .month-cell.is-selected .month-cell-name,
 .month-cell.is-selected .month-cell-owner { color: var(--primary-contrast); }
@@ -584,6 +622,7 @@ textarea.input { min-height: 0; resize: vertical; line-height: 1.5; }
 .pay-row-name { flex: 1; min-width: 120px; font-size: 13.5px; font-weight: 600; color: var(--ink); }
 .pay-row-status { font-size: 12px; font-weight: 700; color: var(--muted); }
 .pay-row-status.is-paid { color: var(--primary); }
+.pay-row-dues { font-weight: 500; color: var(--muted); font-variant-numeric: tabular-nums; }
 
 /* ─── Members & requests ────────────────────────────────────────────────────── */
 
@@ -769,3 +808,71 @@ textarea.input { min-height: 0; resize: vertical; line-height: 1.5; }
   flex-wrap: wrap;
 }
 .send-to bdi { font-family: var(--font-mono); font-weight: 500; direction: ltr; }
+
+/* ─── Card allocation progress ──────────────────────────────────────────────── */
+
+.card-progress {
+  height: 5px;
+  background: var(--surface-3);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.card-progress-fill {
+  height: 100%;
+  background: var(--primary);
+  border-radius: 999px;
+  transition: width 0.3s;
+}
+
+/* ─── Admin console rows ────────────────────────────────────────────────────── */
+
+.row-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+@media (max-width: 560px) {
+  .row-actions .icon-btn-label { display: none; }
+}
+
+/* ─── Mobile bottom navigation ──────────────────────────────────────────────── */
+
+.bottom-nav {
+  position: fixed;
+  bottom: 0;
+  inset-inline: 0;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  box-shadow: 0 -2px 12px rgba(0, 0, 0, 0.06);
+  z-index: 30;
+  display: none;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.bottom-nav-inner {
+  display: flex;
+  max-width: 500px;
+  margin-inline: auto;
+}
+.bottom-nav-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 9px 4px 8px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-family: var(--font);
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.bottom-nav-item.is-active { color: var(--primary); }
+
+@media (max-width: 640px) {
+  .bottom-nav { display: block; }
+  .footer { padding-bottom: 96px; }
+  .nav-inner .icon-btn[aria-label] .icon-btn-label { display: none; }
+}

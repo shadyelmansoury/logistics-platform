@@ -12,7 +12,9 @@ import * as supa from './backend/supabaseStore.js';
 export {
   monthsOf, nowMonth, groupStatus,
   currentUser, userById, groupById,
-  memberOf, isAdmin, hasRequested, recipientOf,
+  memberOf, isAdmin, hasRequested,
+  shareOf, recipientsOf, monthShareTotal, duesOf, potOf, recipientCut,
+  openMonths, isGroupFull, isPlatformAdmin,
 } from './backend/helpers.js';
 
 const impl = supa.hasSupabase ? supa : local;
@@ -39,7 +41,10 @@ export const requestJoin = (groupId, userId) => impl.requestJoin(groupId, userId
 export const cancelRequest = (groupId, userId) => impl.cancelRequest(groupId, userId);
 export const approveRequest = (groupId, userId) => impl.approveRequest(groupId, userId);
 export const rejectRequest = (groupId, userId) => impl.rejectRequest(groupId, userId);
-export const pickMonth = (groupId, userId, month) => impl.pickMonth(groupId, userId, month);
+export const pickMonth = (groupId, userId, month, share) => impl.pickMonth(groupId, userId, month, share);
+export const setGroupHidden = (groupId, hidden) => impl.setGroupHidden(groupId, hidden);
+export const setGroupDisabled = (groupId, disabled) => impl.setGroupDisabled(groupId, disabled);
+export const adminDeleteUser = (userId) => impl.adminDeleteUser(userId);
 export const removeMember = (groupId, userId) => impl.removeMember(groupId, userId);
 export const updateGroup = (groupId, patch) => impl.updateGroup(groupId, patch);
 export const deleteGroup = (groupId) => impl.deleteGroup(groupId);

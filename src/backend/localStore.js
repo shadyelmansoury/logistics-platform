@@ -2,7 +2,7 @@
 // Used automatically when no Supabase keys are configured, so the app
 // always runs — as a single-browser demo.
 
-import { memberOf, hasRequested, monthsOf, groupById, validateGroupPatch } from './helpers.js';
+import { memberOf, hasRequested, groupById, validateGroupPatch, validateMonthPick, isGroupFull } from './helpers.js';
 
 const DB_KEY = 'gameea_db_v1';
 
@@ -59,6 +59,7 @@ export async function register({ firstName, lastName, email, phone, etransferEma
     email: normEmail,
     phone: phone.trim(),
     etransferEmail: (etransferEmail || normEmail).trim().toLowerCase(),
+    role: 'member',
     passwordHash: await hashPassword(password),
     createdAt: Date.now(),
   };
@@ -113,8 +114,10 @@ export async function createGroup({ name, description, amount, currency, maxMemb
     maxMembers: Number(maxMembers),
     startMonth,
     adminId,
+    hidden: false,
+    disabled: false,
     createdAt: Date.now(),
-    members: [{ userId: adminId, month: null, joinedAt: Date.now() }],
+    members: [{ userId: adminId, month: null, share: 1, joinedAt: Date.now() }],
     joinRequests: [],
     payments: {},
   };
@@ -145,11 +148,11 @@ export function cancelRequest(groupId, userId) {
 
 export function approveRequest(groupId, userId) {
   const g = groupById(db, groupId);
-  if (g && g.members.length >= g.maxMembers) throw new Error('groupFull');
+  if (g && (isGroupFull(g) || g.members.length >= g.maxMembers * 2)) throw new Error('groupFull');
   patchGroup(groupId, (gr) => {
     if (!hasRequested(gr, userId) || memberOf(gr, userId)) return gr;
     gr.joinRequests = gr.joinRequests.filter((r) => r.userId !== userId);
-    gr.members = [...gr.members, { userId, month: null, joinedAt: Date.now() }];
+    gr.members = [...gr.members, { userId, month: null, share: 1, joinedAt: Date.now() }];
     return gr;
   });
 }
@@ -158,13 +161,46 @@ export function rejectRequest(groupId, userId) {
   cancelRequest(groupId, userId);
 }
 
-export function pickMonth(groupId, userId, month) {
+export function pickMonth(groupId, userId, month, share = 1) {
   patchGroup(groupId, (g) => {
-    if (!monthsOf(g).includes(month)) return g;
-    if (g.members.some((m) => m.month === month && m.userId !== userId)) return g;
-    g.members = g.members.map((m) => (m.userId === userId ? { ...m, month } : m));
+    let grantedShare;
+    try {
+      grantedShare = validateMonthPick(g, userId, month, share);
+    } catch {
+      return g;
+    }
+    g.members = g.members.map((m) =>
+      (m.userId === userId ? { ...m, month, share: grantedShare } : m));
     return g;
   });
+}
+
+export function setGroupHidden(groupId, hidden) {
+  patchGroup(groupId, (g) => ({ ...g, hidden }));
+}
+
+export function setGroupDisabled(groupId, disabled) {
+  patchGroup(groupId, (g) => ({ ...g, disabled }));
+}
+
+export function adminDeleteUser(userId) {
+  db.users = db.users.filter((u) => u.id !== userId);
+  db.groups = db.groups
+    .filter((g) => g.adminId !== userId)
+    .map((g) => {
+      const payments = {};
+      for (const [month, payers] of Object.entries(g.payments)) {
+        const { [userId]: _removed, ...rest } = payers;
+        payments[month] = rest;
+      }
+      return {
+        ...g,
+        members: g.members.filter((m) => m.userId !== userId),
+        joinRequests: g.joinRequests.filter((r) => r.userId !== userId),
+        payments,
+      };
+    });
+  commit();
 }
 
 export function removeMember(groupId, userId) {

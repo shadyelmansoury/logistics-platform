@@ -15,6 +15,7 @@ create table public.profiles (
   -- The email linked to the member's bank account for e-transfers:
   -- payers send the monthly amount to this address.
   etransfer_email text not null default '',
+  role text not null default 'member' check (role in ('member', 'admin')),
   created_at timestamptz not null default now()
 );
 
@@ -27,6 +28,8 @@ create table public.groups (
   max_members int not null check (max_members between 2 and 36),
   start_month text not null check (start_month ~ '^\d{4}-\d{2}$'),
   admin_id uuid not null references public.profiles(id) on delete cascade,
+  hidden boolean not null default false,
+  disabled boolean not null default false,
   created_at timestamptz not null default now()
 );
 
@@ -34,13 +37,38 @@ create table public.group_members (
   group_id uuid not null references public.groups(id) on delete cascade,
   user_id uuid not null references public.profiles(id) on delete cascade,
   month text check (month ~ '^\d{4}-\d{2}$'),
+  -- 1 = full month; 0.5 = month split with one other member
+  share numeric not null default 1 check (share in (0.5, 1)),
   joined_at timestamptz not null default now(),
   primary key (group_id, user_id)
 );
 
--- One payout month per group: two members can never hold the same month
-create unique index group_members_unique_month
-  on public.group_members (group_id, month) where month is not null;
+-- A month holds one full-share member, or at most two half-share members.
+create or replace function public.check_month_capacity()
+returns trigger
+language plpgsql
+as $$
+declare
+  occ_count int;
+  occ_total numeric;
+begin
+  if new.month is null then return new; end if;
+  select count(*), coalesce(sum(share), 0) into occ_count, occ_total
+    from public.group_members
+    where group_id = new.group_id and month = new.month and user_id <> new.user_id;
+  if occ_count >= 2 or occ_total >= 1 then
+    raise exception 'month is fully taken';
+  end if;
+  if occ_count = 1 and new.share <> 0.5 then
+    raise exception 'month can only be joined as a half share';
+  end if;
+  return new;
+end;
+$$;
+
+create trigger month_capacity
+  before insert or update of month, share on public.group_members
+  for each row execute function public.check_month_capacity();
 
 create table public.join_requests (
   group_id uuid not null references public.groups(id) on delete cascade,
@@ -95,7 +123,8 @@ declare
 begin
   select max_members into cap from public.groups where id = new.group_id;
   select count(*) into cnt from public.group_members where group_id = new.group_id;
-  if cnt >= cap then
+  -- with month splitting, up to two members can share each month
+  if cnt >= cap * 2 then
     raise exception 'group is full';
   end if;
   return new;
@@ -107,6 +136,36 @@ create trigger group_capacity
   for each row execute function public.check_group_capacity();
 
 -- ─── Row Level Security ───────────────────────────────────────────────────────
+
+create or replace function public.is_platform_admin()
+returns boolean
+language sql stable security definer set search_path = public
+as $$
+  select exists (
+    select 1 from public.profiles where id = auth.uid() and role = 'admin'
+  );
+$$;
+
+-- Delete a user account entirely (cascades to profile, groups, memberships,
+-- requests, payments). Platform admins only. Promote an admin with:
+--   update public.profiles set role = 'admin' where email = 'you@example.com';
+create or replace function public.admin_delete_user(target uuid)
+returns void
+language plpgsql security definer set search_path = public
+as $$
+begin
+  if not public.is_platform_admin() then
+    raise exception 'not authorized';
+  end if;
+  if target = auth.uid() then
+    raise exception 'cannot delete your own account';
+  end if;
+  delete from auth.users where id = target;
+end;
+$$;
+
+revoke all on function public.admin_delete_user(uuid) from public;
+grant execute on function public.admin_delete_user(uuid) to authenticated;
 
 create or replace function public.is_group_admin(gid uuid)
 returns boolean
@@ -131,13 +190,23 @@ create policy "profiles_update_own" on public.profiles
 -- Groups: visible to all signed-in users (discovery); only the creator can
 -- create as admin, and only the admin can edit or delete.
 create policy "groups_select" on public.groups
-  for select to authenticated using (true);
+  for select to authenticated using (
+    not hidden
+    or admin_id = auth.uid()
+    or public.is_platform_admin()
+    or exists (select 1 from public.group_members gm
+               where gm.group_id = id and gm.user_id = auth.uid())
+    or exists (select 1 from public.join_requests jr
+               where jr.group_id = id and jr.user_id = auth.uid())
+  );
 create policy "groups_insert_own" on public.groups
   for insert to authenticated with check (admin_id = auth.uid());
 create policy "groups_update_admin" on public.groups
-  for update to authenticated using (admin_id = auth.uid());
+  for update to authenticated
+  using (admin_id = auth.uid() or public.is_platform_admin());
 create policy "groups_delete_admin" on public.groups
-  for delete to authenticated using (admin_id = auth.uid());
+  for delete to authenticated
+  using (admin_id = auth.uid() or public.is_platform_admin());
 
 -- Members: only the group admin adds members (that's the approval step —
 -- including adding themselves when creating the group). A member can update
@@ -145,28 +214,53 @@ create policy "groups_delete_admin" on public.groups
 create policy "members_select" on public.group_members
   for select to authenticated using (true);
 create policy "members_insert_admin" on public.group_members
-  for insert to authenticated with check (public.is_group_admin(group_id));
+  for insert to authenticated
+  with check (public.is_group_admin(group_id) or public.is_platform_admin());
 create policy "members_update" on public.group_members
-  for update to authenticated using (user_id = auth.uid() or public.is_group_admin(group_id));
+  for update to authenticated using (
+    (user_id = auth.uid()
+      and not exists (select 1 from public.groups g where g.id = group_id and g.disabled))
+    or public.is_group_admin(group_id)
+    or public.is_platform_admin()
+  );
 create policy "members_delete" on public.group_members
-  for delete to authenticated using (user_id = auth.uid() or public.is_group_admin(group_id));
+  for delete to authenticated using (
+    user_id = auth.uid()
+    or public.is_group_admin(group_id)
+    or public.is_platform_admin()
+  );
 
 -- Join requests: users file their own; the requester can cancel, the admin
 -- can reject (delete) or approve (insert into group_members + delete request).
 create policy "requests_select" on public.join_requests
   for select to authenticated using (true);
 create policy "requests_insert_own" on public.join_requests
-  for insert to authenticated with check (user_id = auth.uid());
+  for insert to authenticated with check (
+    user_id = auth.uid()
+    and not exists (select 1 from public.groups g
+                    where g.id = group_id and (g.disabled or g.hidden))
+  );
 create policy "requests_delete" on public.join_requests
-  for delete to authenticated using (user_id = auth.uid() or public.is_group_admin(group_id));
+  for delete to authenticated using (
+    user_id = auth.uid()
+    or public.is_group_admin(group_id)
+    or public.is_platform_admin()
+  );
 
 -- Payments: a payer marks/unmarks their own; the admin can mark anyone's.
 create policy "payments_select" on public.payments
   for select to authenticated using (true);
 create policy "payments_insert" on public.payments
-  for insert to authenticated with check (payer_id = auth.uid() or public.is_group_admin(group_id));
+  for insert to authenticated with check (
+    (payer_id = auth.uid() or public.is_group_admin(group_id) or public.is_platform_admin())
+    and not exists (select 1 from public.groups g where g.id = group_id and g.disabled)
+  );
 create policy "payments_delete" on public.payments
-  for delete to authenticated using (payer_id = auth.uid() or public.is_group_admin(group_id));
+  for delete to authenticated using (
+    payer_id = auth.uid()
+    or public.is_group_admin(group_id)
+    or public.is_platform_admin()
+  );
 
 -- ─── Two-factor authentication enforcement ────────────────────────────────────
 -- A user who has enrolled a verified TOTP factor must complete the 2FA

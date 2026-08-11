@@ -1,4 +1,4 @@
-import { Users, Plus, Search, Crown, Hourglass, CalendarPlus } from 'lucide-react';
+import { Users, Plus, Search, Crown, Hourglass, CalendarPlus, EyeOff, PauseCircle } from 'lucide-react';
 import { Card, Btn, Badge, SectionTitle, Empty, Avatar } from './ui.jsx';
 import { monthLabel, fmtMoney } from '../i18n.js';
 import * as store from '../store.js';
@@ -10,10 +10,11 @@ function GroupCard({ g, user, s, lang, onOpen }) {
   const member = store.memberOf(g, user.id);
   const admin = store.isAdmin(g, user.id);
   const requested = store.hasRequested(g, user.id);
-  const full = g.members.length >= g.maxMembers;
+  const full = store.isGroupFull(g);
   const status = store.groupStatus(g);
   const gs = s.group;
   const adminUser = store.userById(d, g.adminId);
+  const allocated = store.monthsOf(g).reduce((sum, m) => sum + Math.min(store.monthShareTotal(g, m), 1), 0);
 
   return (
     <Card className="group-card">
@@ -24,6 +25,8 @@ function GroupCard({ g, user, s, lang, onOpen }) {
             <span>{g.name}</span>
             {admin && <Badge variant="gold"><Crown size={11} /> {s.dash.adminBadge}</Badge>}
             <Badge variant={STATUS_VARIANT[status]}>{gs.status[status]}</Badge>
+            {g.hidden && <Badge variant="muted"><EyeOff size={11} /> {gs.hiddenBadge}</Badge>}
+            {g.disabled && <Badge variant="danger"><PauseCircle size={11} /> {gs.disabledBadge}</Badge>}
           </div>
           <div className="group-card-meta">
             {fmtMoney(g.amount, g.currency, lang)} {s.dash.monthly} · {g.members.length}/{g.maxMembers} {s.dash.members}
@@ -33,6 +36,10 @@ function GroupCard({ g, user, s, lang, onOpen }) {
             {adminUser && !admin ? ` · ${gs.adminLabel}: ${adminUser.name}` : ''}
           </div>
         </div>
+      </div>
+
+      <div className="card-progress" aria-hidden="true">
+        <div className="card-progress-fill" style={{ width: `${(allocated / g.maxMembers) * 100}%` }} />
       </div>
 
       <div className="group-card-actions">
@@ -50,6 +57,8 @@ function GroupCard({ g, user, s, lang, onOpen }) {
             <Badge variant="muted">{s.dash.full}</Badge>
             <Btn size="sm" variant="secondary" onClick={() => onOpen(g.id)}>{s.dash.open}</Btn>
           </>
+        ) : g.disabled ? (
+          <Btn size="sm" variant="secondary" onClick={() => onOpen(g.id)}>{s.dash.open}</Btn>
         ) : (
           <>
             <Btn size="sm" variant="gold" onClick={() => store.requestJoin(g.id, user.id)}>{s.dash.requestJoin}</Btn>
@@ -62,8 +71,13 @@ function GroupCard({ g, user, s, lang, onOpen }) {
 }
 
 export default function Dashboard({ db, user, s, lang, onOpen, onCreate }) {
+  const platformAdmin = store.isPlatformAdmin(db, user.id);
   const mine = db.groups.filter((g) => store.memberOf(g, user.id) || store.hasRequested(g, user.id));
-  const others = db.groups.filter((g) => !store.memberOf(g, user.id) && !store.hasRequested(g, user.id));
+  // Hidden groups don't appear in discovery (platform admins still see them,
+  // with a "Hidden" badge, via the admin console and here).
+  const others = db.groups.filter((g) =>
+    !store.memberOf(g, user.id) && !store.hasRequested(g, user.id)
+    && (!g.hidden || platformAdmin));
 
   return (
     <div className="page stack" style={{ gap: 30 }}>

@@ -5,7 +5,7 @@
 // the UI code is identical for both backends.
 
 import { createClient } from '@supabase/supabase-js';
-import { groupById, validateGroupPatch } from './helpers.js';
+import { groupById, validateGroupPatch, validateMonthPick, isGroupFull } from './helpers.js';
 
 const url = import.meta.env.VITE_SUPABASE_URL;
 const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -58,13 +58,14 @@ async function refresh() {
     email: p.email,
     phone: p.phone,
     etransferEmail: p.etransfer_email,
+    role: p.role || 'member',
     createdAt: ts(p.created_at),
   }));
 
   const membersByGroup = {};
   for (const m of members.data || []) {
     (membersByGroup[m.group_id] ||= []).push({
-      userId: m.user_id, month: m.month, joinedAt: ts(m.joined_at),
+      userId: m.user_id, month: m.month, share: Number(m.share) || 1, joinedAt: ts(m.joined_at),
     });
   }
   const requestsByGroup = {};
@@ -86,6 +87,8 @@ async function refresh() {
     maxMembers: g.max_members,
     startMonth: g.start_month,
     adminId: g.admin_id,
+    hidden: Boolean(g.hidden),
+    disabled: Boolean(g.disabled),
     createdAt: ts(g.created_at),
     members: (membersByGroup[g.id] || []).sort((a, b) => a.joinedAt - b.joinedAt),
     joinRequests: requestsByGroup[g.id] || [],
@@ -300,7 +303,7 @@ export function cancelRequest(groupId, userId) {
 
 export function approveRequest(groupId, userId) {
   const g = groupById(db, groupId);
-  if (g && g.members.length >= g.maxMembers) throw new Error('groupFull');
+  if (g && (isGroupFull(g) || g.members.length >= g.maxMembers * 2)) throw new Error('groupFull');
   (async () => {
     await run(sb.from('group_members').insert({ group_id: groupId, user_id: userId }));
     await run(sb.from('join_requests').delete().eq('group_id', groupId).eq('user_id', userId));
@@ -311,10 +314,34 @@ export function rejectRequest(groupId, userId) {
   cancelRequest(groupId, userId);
 }
 
-export function pickMonth(groupId, userId, month) {
+export function pickMonth(groupId, userId, month, share = 1) {
+  const g = groupById(db, groupId);
+  let grantedShare = share;
+  if (g) {
+    try {
+      grantedShare = validateMonthPick(g, userId, month, share);
+    } catch {
+      return; // cache says the month is taken; refresh will confirm
+    }
+  }
   run(
-    sb.from('group_members').update({ month }).eq('group_id', groupId).eq('user_id', userId),
+    sb.from('group_members').update({ month, share: grantedShare })
+      .eq('group_id', groupId).eq('user_id', userId),
   ).catch(() => {});
+}
+
+export function setGroupHidden(groupId, hidden) {
+  run(sb.from('groups').update({ hidden }).eq('id', groupId)).catch(() => {});
+}
+
+export function setGroupDisabled(groupId, disabled) {
+  run(sb.from('groups').update({ disabled }).eq('id', groupId)).catch(() => {});
+}
+
+export async function adminDeleteUser(userId) {
+  const { error } = await sb.rpc('admin_delete_user', { target: userId });
+  scheduleRefresh();
+  if (error) throw new Error(error.message);
 }
 
 export function removeMember(groupId, userId) {

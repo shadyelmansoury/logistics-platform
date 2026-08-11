@@ -28,6 +28,14 @@ The app has two backends behind the same code:
   backend only.)
 - **Profile page** — members edit their names, phone, and e-transfer email;
   admins reviewing join requests see the applicant's contact details.
+- **Month splitting** — two members (max) can share one month: each pays half
+  the monthly dues and receives half that month's pot. The database enforces
+  the two-half limit.
+- **Platform admin** — accounts with `role = 'admin'` get a moderation console:
+  hide any group from discovery, disable (freeze) any group, edit any group's
+  settings, and delete any group or user platform-wide. All of it enforced by
+  database policies, not just the UI. Promote an admin with:
+  `update public.profiles set role = 'admin' where email = 'you@example.com';`
 - **Create a group** — whoever creates a group becomes its **admin** and defines:
   - the fixed monthly amount and currency (EGP, USD, EUR, SAR, AED)
   - the **max number of members** (which equals the number of months the Gam3ya runs)
@@ -142,9 +150,9 @@ Security lives in the database (`supabase/schema.sql`), not just the UI:
   reads and writes to a session that hasn't completed the TOTP challenge, for
   any account with an enrolled factor.
 
-Already ran the original `schema.sql` before the 2FA/profile update? Run
-[`supabase/upgrade-002.sql`](supabase/upgrade-002.sql) once to add the new
-columns and policies — fresh installs only need `schema.sql`.
+Existing installs upgrade with the numbered files in `supabase/`
+(`upgrade-002.sql`, then `upgrade-003.sql`) — fresh installs only need
+`schema.sql`, which always contains the full current schema.
 
 ## Tech stack
 

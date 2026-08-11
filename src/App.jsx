@@ -1,5 +1,5 @@
 import { useEffect, useState, useSyncExternalStore } from 'react';
-import { Languages, LogOut, Sun, Moon } from 'lucide-react';
+import { Languages, LogOut, Sun, Moon, ShieldAlert, Home, Plus, UserRound } from 'lucide-react';
 import { S } from './i18n.js';
 import * as store from './store.js';
 import Auth from './components/Auth.jsx';
@@ -8,6 +8,7 @@ import Dashboard from './components/Dashboard.jsx';
 import CreateGroup from './components/CreateGroup.jsx';
 import GroupDetail from './components/GroupDetail.jsx';
 import Account from './components/Account.jsx';
+import AdminConsole from './components/AdminConsole.jsx';
 import { Avatar, Logo } from './components/ui.jsx';
 
 const LANG_KEY = 'gam3ya_lang';
@@ -32,6 +33,7 @@ export default function App() {
   const [view, setView] = useState({ name: 'dashboard' });
   const s = S[lang];
   const user = store.currentUser(db);
+  const platformAdmin = user ? store.isPlatformAdmin(db, user.id) : false;
 
   useEffect(() => {
     const root = document.documentElement;
@@ -73,6 +75,17 @@ export default function App() {
           >
             {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
           </button>
+          {user && platformAdmin && (
+            <button
+              className="icon-btn"
+              onClick={() => setView({ name: 'admin' })}
+              aria-label={s.nav.adminConsole}
+              title={s.nav.adminConsole}
+            >
+              <ShieldAlert size={16} />
+              <span className="icon-btn-label">{s.nav.adminConsole}</span>
+            </button>
+          )}
           {user && (
             <>
               <button
@@ -101,6 +114,8 @@ export default function App() {
         <Auth s={s} />
       ) : view.name === 'account' ? (
         <Account user={user} s={s} onBack={goHome} />
+      ) : view.name === 'admin' && platformAdmin ? (
+        <AdminConsole db={db} user={user} s={s} lang={lang} onOpen={openGroup} onBack={goHome} />
       ) : view.name === 'create' ? (
         <CreateGroup user={user} s={s} lang={lang} onDone={openGroup} onBack={goHome} />
       ) : view.name === 'group' ? (
@@ -114,6 +129,44 @@ export default function App() {
         {s.appName} · {s.appNameAr} — {s.tagline}
         {store.backend === 'local' && <div>{s.common.demoMode}</div>}
       </footer>
+
+      {/* Mobile bottom navigation */}
+      {user && !db.mfaPending && (
+        <nav className="bottom-nav" aria-label={s.appName}>
+          <div className="bottom-nav-inner">
+            <button
+              className={`bottom-nav-item${view.name === 'dashboard' || view.name === 'group' ? ' is-active' : ''}`}
+              onClick={goHome}
+            >
+              <Home size={19} />
+              <span>{s.nav.home}</span>
+            </button>
+            <button
+              className={`bottom-nav-item${view.name === 'create' ? ' is-active' : ''}`}
+              onClick={() => setView({ name: 'create' })}
+            >
+              <Plus size={19} />
+              <span>{s.nav.newGroup}</span>
+            </button>
+            {platformAdmin && (
+              <button
+                className={`bottom-nav-item${view.name === 'admin' ? ' is-active' : ''}`}
+                onClick={() => setView({ name: 'admin' })}
+              >
+                <ShieldAlert size={19} />
+                <span>{s.nav.adminConsole}</span>
+              </button>
+            )}
+            <button
+              className={`bottom-nav-item${view.name === 'account' ? ' is-active' : ''}`}
+              onClick={() => setView({ name: 'account' })}
+            >
+              <UserRound size={19} />
+              <span>{s.nav.account}</span>
+            </button>
+          </div>
+        </nav>
+      )}
     </>
   );
 }

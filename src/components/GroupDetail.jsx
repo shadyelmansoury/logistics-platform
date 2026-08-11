@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import {
   ArrowLeft, Crown, Users, CalendarDays, Wallet, Settings2, ChevronDown,
   CheckCircle2, Circle, Hourglass, UserPlus, Trash2, LogOut, HandCoins, Landmark,
+  EyeOff, PauseCircle, PlayCircle, Eye, ShieldAlert,
 } from 'lucide-react';
 import {
   Card, Btn, Badge, SectionTitle, Avatar, Empty, Field, Input, ErrorBox, InfoBox, ConfirmDialog,
@@ -11,17 +12,22 @@ import * as store from '../store.js';
 
 const STATUS_VARIANT = { forming: 'gold', active: 'primary', completed: 'muted' };
 
+const namesOf = (d, members) =>
+  members.map((m) => store.userById(d, m.userId)?.name || '?').join(' + ');
+
 // ─── Header ───────────────────────────────────────────────────────────────────
-function Header({ g, s, lang, admin }) {
+function Header({ g, s, lang, admin, platformAdmin, me }) {
   const d = store.getDB();
   const status = store.groupStatus(g);
   const gs = s.group;
   const adminUser = store.userById(d, g.adminId);
-  const pot = g.amount * (g.maxMembers - 1);
+  const idealPot = g.amount * (g.maxMembers - 1);
 
   const stats = [
     { label: gs.monthlyAmount, val: fmtMoney(g.amount, g.currency, lang) },
-    { label: gs.perTurn, val: fmtMoney(pot, g.currency, lang) },
+    me
+      ? { label: gs.yourDues, val: fmtMoney(store.duesOf(g, me), g.currency, lang) }
+      : { label: gs.perTurn, val: fmtMoney(idealPot, g.currency, lang) },
     { label: gs.duration, val: `${g.maxMembers} ${gs.months}` },
     { label: gs.startsLabel, val: monthLabel(g.startMonth, s.locale) },
   ];
@@ -35,10 +41,12 @@ function Header({ g, s, lang, admin }) {
             <span className="group-title">{g.name}</span>
             <Badge variant={STATUS_VARIANT[status]}>{gs.status[status]}</Badge>
             {admin && <Badge variant="gold"><Crown size={11} /> {s.dash.adminBadge}</Badge>}
+            {g.hidden && (admin || platformAdmin) && <Badge variant="muted"><EyeOff size={11} /> {gs.hiddenBadge}</Badge>}
+            {g.disabled && <Badge variant="danger"><PauseCircle size={11} /> {gs.disabledBadge}</Badge>}
           </div>
           {g.description && <p className="group-desc">{g.description}</p>}
           <div className="group-sub">
-            {gs.adminLabel}: {adminUser?.name || '—'} · {g.members.length}/{g.maxMembers} {s.dash.members}
+            {gs.adminLabel}: {adminUser?.name || '—'} · {g.members.length} {s.dash.members}
           </div>
         </div>
       </div>
@@ -55,13 +63,20 @@ function Header({ g, s, lang, admin }) {
   );
 }
 
-// ─── Month picker ─────────────────────────────────────────────────────────────
-function MonthPicker({ g, user, s, onPicked }) {
+// ─── Month picker (supports full and half shares) ─────────────────────────────
+function MonthPicker({ g, user, s, lang, onPicked }) {
   const [selected, setSelected] = useState(null);
+  const [shareChoice, setShareChoice] = useState('full');
   const gs = s.group;
   const months = store.monthsOf(g);
   const me = store.memberOf(g, user.id);
   const d = store.getDB();
+
+  const selectedOthers = selected
+    ? store.recipientsOf(g, selected).filter((m) => m.userId !== user.id)
+    : [];
+  const joiningHalf = selectedOthers.length === 1;
+  const effectiveShare = joiningHalf ? 0.5 : (shareChoice === 'half' ? 0.5 : 1);
 
   return (
     <Card className="card-primary">
@@ -72,35 +87,62 @@ function MonthPicker({ g, user, s, onPicked }) {
             <span>{me.month ? gs.changeMonth : gs.pickTitle}</span>
           </div>
           <p className="field-hint" style={{ marginTop: 4 }}>{gs.pickHint}</p>
+          <p className="field-hint" style={{ marginTop: 4 }}>{gs.shareHint}</p>
         </div>
+
         <div className="month-grid">
           {months.map((m) => {
-            const owner = store.recipientOf(g, m);
-            const takenByOther = owner && owner.userId !== user.id;
-            const isMine = owner && owner.userId === user.id;
+            const occupants = store.recipientsOf(g, m).filter((x) => x.userId !== user.id);
+            const mine = store.recipientsOf(g, m).some((x) => x.userId === user.id);
+            const total = occupants.reduce((sum, x) => sum + store.shareOf(x), 0);
+            const full = occupants.length >= 2 || total >= 1;
+            const halfOpen = occupants.length === 1 && total === 0.5;
             const isSelected = selected === m;
-            const cls = ['month-cell', isSelected && 'is-selected', isMine && !isSelected && 'is-mine']
-              .filter(Boolean).join(' ');
+            const cls = ['month-cell', isSelected && 'is-selected', mine && !isSelected && 'is-mine',
+              halfOpen && !isSelected && !mine && 'is-half'].filter(Boolean).join(' ');
             return (
               <button
                 key={m}
                 type="button"
-                disabled={takenByOther}
+                disabled={full && !mine}
                 className={cls}
                 onClick={() => setSelected(isSelected ? null : m)}
                 aria-pressed={isSelected}
               >
                 <div className="month-cell-name">{monthLabel(m, s.locale)}</div>
                 <div className="month-cell-owner">
-                  {isMine ? gs.you : takenByOther ? store.userById(d, owner.userId)?.name : gs.available}
+                  {mine ? gs.you
+                    : full ? namesOf(d, occupants)
+                    : halfOpen ? `${gs.halfOpen} · ${namesOf(d, occupants)}`
+                    : gs.available}
                 </div>
               </button>
             );
           })}
         </div>
+
+        {selected && !joiningHalf && (
+          <div className="segmented" role="radiogroup" aria-label={gs.shareFull}>
+            {[['full', gs.shareFull], ['half', gs.shareHalf]].map(([val, label]) => (
+              <button key={val} type="button" role="radio" aria-checked={shareChoice === val}
+                className={`segment${shareChoice === val ? ' is-active' : ''}`}
+                onClick={() => setShareChoice(val)}>
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
+        {selected && joiningHalf && <InfoBox>{gs.joinAsHalf}</InfoBox>}
+
         {selected && (
-          <Btn size="lg" block onClick={() => { store.pickMonth(g.id, user.id, selected); setSelected(null); onPicked?.(); }}>
+          <Btn size="lg" block
+            onClick={() => {
+              store.pickMonth(g.id, user.id, selected, effectiveShare);
+              setSelected(null);
+              onPicked?.();
+            }}>
             {gs.confirmPick} — {monthLabel(selected, s.locale)}
+            {effectiveShare === 0.5 ? ` (${gs.shareHalf})` : ''}
           </Btn>
         )}
       </div>
@@ -114,42 +156,43 @@ function ScheduleTab({ g, user, s, lang }) {
   const gs = s.group;
   const months = store.monthsOf(g);
   const current = store.nowMonth();
-  const pot = g.amount * (g.maxMembers - 1);
 
   return (
     <div className="stack-sm">
       {months.map((m, i) => {
-        const owner = store.recipientOf(g, m);
-        const ownerUser = owner ? store.userById(d, owner.userId) : null;
-        const isMine = owner?.userId === user?.id;
+        const recips = store.recipientsOf(g, m);
+        const isMine = recips.some((r) => r.userId === user?.id);
         const isCurrent = m === current;
         const isPast = m < current;
-        const paidCount = Object.keys(g.payments[m] || {})
-          .filter((pid) => pid !== owner?.userId && store.memberOf(g, pid)).length;
-        const payerTotal = Math.max(g.members.length - 1, 0);
-        const rowCls = ['schedule-row', isMine && 'is-mine', !isMine && isCurrent && 'is-current', isPast && !isMine && 'is-past']
-          .filter(Boolean).join(' ');
+        const halfOpen = store.monthShareTotal(g, m) === 0.5;
+        const payers = g.members.filter((mem) => mem.month !== m);
+        const paidCount = payers.filter((p) => g.payments[m]?.[p.userId]).length;
+        const rowCls = ['schedule-row', isMine && 'is-mine', !isMine && isCurrent && 'is-current',
+          isPast && !isMine && 'is-past'].filter(Boolean).join(' ');
         return (
           <div key={m} className={rowCls}>
-            <span className={`turn-dot${owner ? (isMine ? ' is-gold' : '') : ' is-empty'}`}>
-              {owner ? i + 1 : ''}
+            <span className={`turn-dot${recips.length ? (isMine ? ' is-gold' : '') : ' is-empty'}`}>
+              {recips.length ? i + 1 : ''}
             </span>
             <div className="schedule-main">
               <div className="schedule-month">
                 <span>{monthLabel(m, s.locale)}</span>
                 {isCurrent && <Badge variant="primary">{gs.currentMonth}</Badge>}
                 {isMine && <Badge variant="gold">{gs.you}</Badge>}
+                {recips.length === 2 && <Badge variant="info">{gs.halfBadge}</Badge>}
               </div>
-              <div className={`schedule-recipient${owner ? '' : ' is-unassigned'}`}>
-                {owner
-                  ? `${ownerUser?.name || '?'} ${gs.receives} ${fmtMoney(pot, g.currency, lang)}`
-                  : gs.unassigned}
+              <div className={`schedule-recipient${recips.length ? '' : ' is-unassigned'}`}>
+                {recips.length === 0
+                  ? gs.unassigned
+                  : recips.length === 1
+                    ? `${store.userById(d, recips[0].userId)?.name || '?'} ${gs.receives} ${fmtMoney(store.recipientCut(g, m, recips[0]), g.currency, lang)}${halfOpen ? ` · ${gs.halfOpen}` : ''}`
+                    : `${namesOf(d, recips)} — ${fmtMoney(store.recipientCut(g, m, recips[0]), g.currency, lang)} ${gs.each}`}
               </div>
             </div>
-            {owner && payerTotal > 0 && (
+            {recips.length > 0 && payers.length > 0 && (
               <div className="schedule-count">
-                <div className={`schedule-count-value${paidCount >= payerTotal ? ' is-complete' : ''}`}>
-                  {paidCount}/{payerTotal}
+                <div className={`schedule-count-value${paidCount >= payers.length ? ' is-complete' : ''}`}>
+                  {paidCount}/{payers.length}
                 </div>
                 <div className="schedule-count-label">{gs.paid}</div>
               </div>
@@ -162,20 +205,18 @@ function ScheduleTab({ g, user, s, lang }) {
 }
 
 // ─── Payments tab ─────────────────────────────────────────────────────────────
-function PaymentsTab({ g, user, s, lang, admin }) {
+function PaymentsTab({ g, user, s, lang, admin, frozen }) {
   const d = store.getDB();
   const gs = s.group;
   const months = store.monthsOf(g);
   const current = store.nowMonth();
   const [open, setOpen] = useState(months.includes(current) ? current : months[0]);
-  const pot = g.amount * (g.maxMembers - 1);
 
   return (
     <div className="stack-sm">
       {months.map((m) => {
-        const owner = store.recipientOf(g, m);
-        const ownerUser = owner ? store.userById(d, owner.userId) : null;
-        const payers = g.members.filter((mem) => mem.userId !== owner?.userId);
+        const recips = store.recipientsOf(g, m);
+        const payers = g.members.filter((mem) => mem.month !== m);
         const paidCount = payers.filter((p) => g.payments[m]?.[p.userId]).length;
         const isOpen = open === m;
         return (
@@ -186,40 +227,48 @@ function PaymentsTab({ g, user, s, lang, admin }) {
               onClick={() => setOpen(isOpen ? null : m)}
               aria-expanded={isOpen}
             >
-              <Wallet size={16} style={{ color: owner ? 'var(--primary)' : 'var(--faint)', flexShrink: 0 }} />
+              <Wallet size={16} style={{ color: recips.length ? 'var(--primary)' : 'var(--faint)', flexShrink: 0 }} />
               <div className="pay-head-main">
                 <div className="pay-head-month">
                   {monthLabel(m, s.locale)}{m === current ? ` · ${gs.currentMonth}` : ''}
                 </div>
                 <div className="pay-head-sub">
-                  {owner ? `${ownerUser?.name} ${gs.receives} ${fmtMoney(pot, g.currency, lang)}` : gs.unassigned}
+                  {recips.length
+                    ? `${namesOf(d, recips)} ${gs.receives} ${fmtMoney(store.potOf(g, m), g.currency, lang)}`
+                    : gs.unassigned}
                 </div>
               </div>
-              {owner && payers.length > 0 && (
+              {recips.length > 0 && payers.length > 0 && (
                 <Badge variant={paidCount >= payers.length ? 'primary' : 'muted'}>
                   {t(gs.progress, { p: paidCount, t: payers.length })}
                 </Badge>
               )}
               <ChevronDown size={16} className="pay-chevron" />
             </button>
-            {isOpen && owner && payers.length > 0 && (
+            {isOpen && recips.length > 0 && payers.length > 0 && (
               <div className="progress" aria-hidden="true">
                 <div className="progress-fill" style={{ width: `${(paidCount / payers.length) * 100}%` }} />
               </div>
             )}
-            {isOpen && owner && (
+            {isOpen && recips.length > 0 && (
               <div className="pay-body">
-                {(ownerUser?.etransferEmail || ownerUser?.email) && (
-                  <div className="send-to">
-                    <Landmark size={14} />
-                    <span>{gs.sendTo}:</span>
-                    <bdi>{ownerUser.etransferEmail || ownerUser.email}</bdi>
-                  </div>
-                )}
+                {recips.map((r) => {
+                  const ru = store.userById(d, r.userId);
+                  return (
+                    <div key={r.userId} className="send-to">
+                      <Landmark size={14} />
+                      <span>
+                        {gs.sendTo} {ru?.name}
+                        {recips.length === 2 ? ` (${fmtMoney(store.recipientCut(g, m, r), g.currency, lang)})` : ''}:
+                      </span>
+                      <bdi>{ru?.etransferEmail || ru?.email}</bdi>
+                    </div>
+                  );
+                })}
                 {payers.map((p) => {
                   const pu = store.userById(d, p.userId);
                   const paidAt = g.payments[m]?.[p.userId];
-                  const canToggle = admin || p.userId === user?.id;
+                  const canToggle = !frozen && (admin || p.userId === user?.id);
                   return (
                     <div key={p.userId} className="pay-row">
                       {paidAt
@@ -227,6 +276,7 @@ function PaymentsTab({ g, user, s, lang, admin }) {
                         : <Circle size={16} style={{ color: 'var(--faint)', flexShrink: 0 }} />}
                       <span className="pay-row-name">
                         {pu?.name}{p.userId === user?.id ? ` (${gs.you})` : ''}
+                        <span className="pay-row-dues"> · {fmtMoney(store.duesOf(g, p), g.currency, lang)}</span>
                       </span>
                       <span className={`pay-row-status${paidAt ? ' is-paid' : ''}`}>
                         {paidAt ? gs.paid : gs.notPaid}
@@ -242,7 +292,7 @@ function PaymentsTab({ g, user, s, lang, admin }) {
                 })}
               </div>
             )}
-            {isOpen && !owner && (
+            {isOpen && recips.length === 0 && (
               <div className="pay-body">
                 <span className="field-hint">{gs.unassigned}</span>
               </div>
@@ -255,10 +305,10 @@ function PaymentsTab({ g, user, s, lang, admin }) {
 }
 
 // ─── Members tab ──────────────────────────────────────────────────────────────
-function MembersTab({ g, user, s, admin, onLeft }) {
+function MembersTab({ g, user, s, lang, admin, onLeft }) {
   const d = store.getDB();
   const gs = s.group;
-  const [confirming, setConfirming] = useState(null); // { type: 'remove'|'leave', userId }
+  const [confirming, setConfirming] = useState(null);
 
   const doConfirm = () => {
     if (confirming.type === 'leave') {
@@ -277,6 +327,7 @@ function MembersTab({ g, user, s, admin, onLeft }) {
         const mu = store.userById(d, m.userId);
         const isMe = m.userId === user?.id;
         const isGroupAdmin = m.userId === g.adminId;
+        const isHalf = store.shareOf(m) === 0.5;
         return (
           <div key={m.userId} className="member-row">
             <Avatar name={mu?.name} size={38} gold={isGroupAdmin} />
@@ -284,9 +335,11 @@ function MembersTab({ g, user, s, admin, onLeft }) {
               <div className="member-name">
                 <span>{mu?.name}{isMe ? ` (${gs.you})` : ''}</span>
                 {isGroupAdmin && <Badge variant="gold"><Crown size={11} /> {s.dash.adminBadge}</Badge>}
+                {isHalf && <Badge variant="info">{gs.halfBadge}</Badge>}
               </div>
               <div className="member-sub">
                 {m.month ? `${gs.monthOf}: ${monthLabel(m.month, s.locale)}` : gs.noMonth}
+                {` · ${fmtMoney(store.duesOf(g, m), g.currency, lang)} ${s.dash.monthly}`}
               </div>
               {(mu?.phone || mu?.etransferEmail) && (
                 <div className="member-sub member-contact">
@@ -321,18 +374,19 @@ function MembersTab({ g, user, s, admin, onLeft }) {
   );
 }
 
-// ─── Manage tab (admin) ───────────────────────────────────────────────────────
-function ManageTab({ g, s, onDeleted }) {
+// ─── Manage tab (group admin + platform admin) ────────────────────────────────
+function ManageTab({ g, s, platformAdmin, onDeleted }) {
   const d = store.getDB();
   const gs = s.group;
+  const ac = s.adminc;
   const [form, setForm] = useState({
     name: g.name, description: g.description, amount: String(g.amount),
     maxMembers: String(g.maxMembers), startMonth: g.startMonth,
   });
-  const [msg, setMsg] = useState(null); // { ok, text }
+  const [msg, setMsg] = useState(null);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
-  const full = g.members.length >= g.maxMembers;
+  const full = store.isGroupFull(g);
 
   const save = (e) => {
     e.preventDefault();
@@ -354,6 +408,27 @@ function ManageTab({ g, s, onDeleted }) {
 
   return (
     <div className="stack">
+      {platformAdmin && (
+        <Card className="card-gold">
+          <div className="stack" style={{ gap: 10 }}>
+            <SectionTitle><ShieldAlert size={13} /> {ac.title}</SectionTitle>
+            <div className="head-row">
+              <span className="field-hint">{g.hidden ? ac.hiddenNote : gs.hiddenBadge}</span>
+              <Btn size="sm" variant="secondary" onClick={() => store.setGroupHidden(g.id, !g.hidden)}>
+                {g.hidden ? <><Eye size={13} /> {ac.unhide}</> : <><EyeOff size={13} /> {ac.hide}</>}
+              </Btn>
+            </div>
+            <div className="head-row">
+              <span className="field-hint">{g.disabled ? ac.disabledNote : gs.disabledBadge}</span>
+              <Btn size="sm" variant={g.disabled ? 'primary' : 'danger'}
+                onClick={() => store.setGroupDisabled(g.id, !g.disabled)}>
+                {g.disabled ? <><PlayCircle size={13} /> {ac.enable}</> : <><PauseCircle size={13} /> {ac.disable}</>}
+              </Btn>
+            </div>
+          </div>
+        </Card>
+      )}
+
       <Card>
         <div className="stack" style={{ gap: 12 }}>
           <SectionTitle><UserPlus size={13} /> {gs.requests}</SectionTitle>
@@ -436,33 +511,35 @@ export default function GroupDetail({ db, groupId, user, s, lang, onBack }) {
   const g = store.groupById(db, groupId);
   const gs = s.group;
 
-  // The group can disappear underneath us (deleted on another device and
-  // synced via realtime) — navigate home instead of rendering nothing.
-  // Grace period: right after a mutation the cache may briefly lack the
-  // group while a refresh is in flight, so don't bounce immediately.
   useEffect(() => {
     if (g) return undefined;
-    const t = setTimeout(onBack, 2500);
-    return () => clearTimeout(t);
+    const timer = setTimeout(onBack, 2500);
+    return () => clearTimeout(timer);
   }, [g]);
   if (!g) return <div className="loading-screen">{s.common.loading}</div>;
 
   const member = store.memberOf(g, user.id);
   const admin = store.isAdmin(g, user.id);
+  const platformAdmin = store.isPlatformAdmin(db, user.id);
   const requested = store.hasRequested(g, user.id);
-  const full = g.members.length >= g.maxMembers;
-  const spotsLeft = g.maxMembers - g.members.length;
+  const full = store.isGroupFull(g);
+  const openCount = store.openMonths(g).length;
+  const frozen = g.disabled;
 
   const tabs = [
     { id: 'schedule', label: gs.tabs.schedule, Icon: CalendarDays },
     { id: 'payments', label: gs.tabs.payments, Icon: Wallet, memberOnly: true },
     { id: 'members', label: gs.tabs.members, Icon: Users },
-    ...(admin ? [{
+    ...((admin || platformAdmin) ? [{
       id: 'manage',
       label: `${gs.tabs.manage}${g.joinRequests.length ? ` (${g.joinRequests.length})` : ''}`,
       Icon: Settings2,
     }] : []),
   ].filter((tb) => !tb.memberOnly || member);
+
+  const sharedWithNames = member?.month
+    ? namesOf(db, store.recipientsOf(g, member.month).filter((m) => m.userId !== user.id))
+    : '';
 
   return (
     <div className="page stack">
@@ -472,17 +549,30 @@ export default function GroupDetail({ db, groupId, user, s, lang, onBack }) {
         </Btn>
       </div>
 
-      <Header g={g} s={s} lang={lang} admin={admin} />
+      <Header g={g} s={s} lang={lang} admin={admin} platformAdmin={platformAdmin} me={member} />
+
+      {/* Disabled notice */}
+      {frozen && (
+        <Card className="card-danger-outline">
+          <div className="banner" style={{ padding: 0 }}>
+            <PauseCircle size={22} style={{ color: 'var(--danger)', flexShrink: 0 }} />
+            <div className="banner-main">
+              <div className="banner-title">{gs.disabledTitle}</div>
+              <div className="banner-sub">{gs.disabledDesc}</div>
+            </div>
+          </div>
+        </Card>
+      )}
 
       {/* Join banner for non-members */}
-      {!member && (
+      {!member && !frozen && (
         <Card className="card-gold">
           <div className="banner" style={{ padding: 0 }}>
             <HandCoins size={22} style={{ color: 'var(--gold)', flexShrink: 0 }} />
             <div className="banner-main">
               <div className="banner-title">{requested ? gs.requested : gs.notMember}</div>
               <div className="banner-sub">
-                {gs.joinHint}{!full && !requested ? ` · ${t(gs.spotsLeft, { n: spotsLeft })}` : ''}
+                {gs.joinHint}{!full && !requested ? ` · ${t(gs.monthsOpen, { n: openCount })}` : ''}
               </div>
             </div>
             {requested ? (
@@ -496,17 +586,20 @@ export default function GroupDetail({ db, groupId, user, s, lang, onBack }) {
         </Card>
       )}
 
-      {/* Month picker: member without a month, or changing month while forming */}
-      {member && (!member.month || changingMonth) && (
-        <MonthPicker g={g} user={user} s={s} onPicked={() => setChangingMonth(false)} />
+      {/* Month picker / current month banner */}
+      {member && !frozen && (!member.month || changingMonth) && (
+        <MonthPicker g={g} user={user} s={s} lang={lang} onPicked={() => setChangingMonth(false)} />
       )}
-      {member && member.month && !changingMonth && (
+      {member && member.month && (!changingMonth || frozen) && (
         <div className="banner banner-gold">
           <Hourglass size={15} style={{ color: 'var(--gold)', flexShrink: 0 }} />
           <div className="banner-main">
-            <span className="banner-title">{gs.yourMonthIs} {monthLabel(member.month, s.locale)}</span>
+            <span className="banner-title">
+              {gs.yourMonthIs} {monthLabel(member.month, s.locale)}
+              {store.shareOf(member) === 0.5 ? ` (${gs.halfBadge}${sharedWithNames ? ` — ${gs.sharedWith} ${sharedWithNames}` : ''})` : ''}
+            </span>
           </div>
-          {store.groupStatus(g) === 'forming' && (
+          {store.groupStatus(g) === 'forming' && !frozen && (
             <Btn size="sm" variant="secondary" onClick={() => setChangingMonth(true)}>{gs.changeMonth}</Btn>
           )}
         </div>
@@ -529,9 +622,15 @@ export default function GroupDetail({ db, groupId, user, s, lang, onBack }) {
       </div>
 
       {tab === 'schedule' && <ScheduleTab g={g} user={user} s={s} lang={lang} />}
-      {tab === 'payments' && member && <PaymentsTab g={g} user={user} s={s} lang={lang} admin={admin} />}
-      {tab === 'members' && <MembersTab g={g} user={user} s={s} admin={admin} onLeft={onBack} />}
-      {tab === 'manage' && admin && <ManageTab g={g} s={s} onDeleted={onBack} />}
+      {tab === 'payments' && member && (
+        <PaymentsTab g={g} user={user} s={s} lang={lang} admin={admin || platformAdmin} frozen={frozen} />
+      )}
+      {tab === 'members' && (
+        <MembersTab g={g} user={user} s={s} lang={lang} admin={admin || platformAdmin} onLeft={onBack} />
+      )}
+      {tab === 'manage' && (admin || platformAdmin) && (
+        <ManageTab g={g} s={s} platformAdmin={platformAdmin} onDeleted={onBack} />
+      )}
     </div>
   );
 }

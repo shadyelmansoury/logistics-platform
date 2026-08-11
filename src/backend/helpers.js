@@ -1,7 +1,9 @@
 // Pure helpers over the shared db shape:
-// { users: [{id, name, email, phone}], groups: [...], session: userId|null }
+// { users: [{id, name, firstName, lastName, email, phone, etransferEmail, role}],
+//   groups: [...], session: userId|null }
 // Group shape: { id, name, description, amount, currency, maxMembers, startMonth,
-//   adminId, members: [{userId, month, joinedAt}], joinRequests: [{userId, requestedAt}],
+//   adminId, hidden, disabled, members: [{userId, month, share, joinedAt}],
+//   joinRequests: [{userId, requestedAt}],
 //   payments: { "YYYY-MM": { [payerId]: timestamp } } }
 // Both backends (localStorage demo and Supabase) produce this exact shape,
 // so the UI never knows which one it's talking to.
@@ -19,14 +21,47 @@ export const nowMonth = () => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 };
 
+// ─── Shares & split months ────────────────────────────────────────────────────
+// A member holds a full month (share 1) or splits a month with one other
+// member (share 0.5 each). Dues scale with the share; the pot of a month is
+// split between its recipients in proportion to their shares.
+
+export const shareOf = (member) => Number(member.share) || 1;
+export const recipientsOf = (group, month) => group.members.filter((m) => m.month === month);
+export const monthShareTotal = (group, month) =>
+  recipientsOf(group, month).reduce((s, m) => s + shareOf(m), 0);
+
+// What this member pays each month (their own turn month excluded)
+export const duesOf = (group, member) => group.amount * shareOf(member);
+
+// Total collected for a month = everyone else's dues
+export const potOf = (group, month) =>
+  group.members
+    .filter((m) => m.month !== month)
+    .reduce((s, m) => s + group.amount * shareOf(m), 0);
+
+// A recipient's cut of the month's pot (halves split it equally)
+export function recipientCut(group, month, member) {
+  const total = monthShareTotal(group, month);
+  return total > 0 ? potOf(group, month) * (shareOf(member) / total) : 0;
+}
+
+// Months that still have unallocated share
+export const openMonths = (group) =>
+  monthsOf(group).filter((m) => monthShareTotal(group, m) < 1);
+
+export const isGroupFull = (group) => openMonths(group).length === 0;
+
 export function groupStatus(group) {
-  const full = group.members.length >= group.maxMembers;
+  const allAllocated = monthsOf(group).every((m) => monthShareTotal(group, m) >= 1);
   const allPicked = group.members.every((m) => m.month);
-  if (!full || !allPicked) return 'forming';
+  if (!allAllocated || !allPicked) return 'forming';
   const months = monthsOf(group);
   if (nowMonth() > months[months.length - 1]) return 'completed';
   return 'active';
 }
+
+// ─── Lookups ──────────────────────────────────────────────────────────────────
 
 export const currentUser = (d) => d.users.find((u) => u.id === d.session) || null;
 export const userById = (d, id) => d.users.find((u) => u.id === id) || null;
@@ -35,14 +70,27 @@ export const groupById = (d, id) => d.groups.find((g) => g.id === id) || null;
 export const memberOf = (group, userId) => group.members.find((m) => m.userId === userId) || null;
 export const isAdmin = (group, userId) => group.adminId === userId;
 export const hasRequested = (group, userId) => group.joinRequests.some((r) => r.userId === userId);
-export const recipientOf = (group, month) => group.members.find((m) => m.month === month) || null;
 
-// Shared client-side validation for editing a group (both backends throw the
-// same error codes so the UI handles them identically).
+export const isPlatformAdmin = (d, userId) => userById(d, userId)?.role === 'admin';
+
+// ─── Validation shared by both backends ───────────────────────────────────────
+
 export function validateGroupPatch(group, patch) {
   const next = { ...group, ...patch };
-  if (next.maxMembers < group.members.length) throw new Error('maxTooLow');
+  if (next.maxMembers * 2 < group.members.length) throw new Error('maxTooLow');
   const months = monthsOf(next);
   if (group.members.some((m) => m.month && !months.includes(m.month))) throw new Error('maxTooLow');
   return next;
+}
+
+// Returns the share the user may take for a month, or throws.
+export function validateMonthPick(group, userId, month, requestedShare) {
+  if (!monthsOf(group).includes(month)) throw new Error('badMonth');
+  const occupants = recipientsOf(group, month).filter((m) => m.userId !== userId);
+  if (occupants.length >= 2) throw new Error('monthFull');
+  if (occupants.length === 1) {
+    if (shareOf(occupants[0]) >= 1) throw new Error('monthFull');
+    return 0.5; // joining an existing half — the other half is forced
+  }
+  return requestedShare === 0.5 ? 0.5 : 1;
 }
