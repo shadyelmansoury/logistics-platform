@@ -67,6 +67,8 @@ export const S = {
       joinApproved: 'You’ve been approved to join “{group}” — open it and pick your month',
       accountPending: '{detail} registered and is awaiting your approval',
       accountApproved: 'Your account has been approved — welcome to Gameya',
+      monthChangeRequest: '{detail} requested a month change in “{group}”',
+      monthChangeApproved: 'Your month change in “{group}” was approved',
       unknownGroup: 'a deleted group',
     },
     account: {
@@ -287,6 +289,8 @@ export const S = {
       joinApproved: 'تمت الموافقة على انضمامك لجمعية «{group}» — افتحها واختار شهرك',
       accountPending: '{detail} سجّل حساب جديد وفي انتظار موافقتك',
       accountApproved: 'تمت الموافقة على حسابك — أهلاً بيك في جمعية',
+      monthChangeRequest: '{detail} طلب تغيير شهره في «{group}»',
+      monthChangeApproved: 'تمت الموافقة على تغيير شهرك في «{group}»',
       unknownGroup: 'جمعية محذوفة',
     },
     account: {

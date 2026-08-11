@@ -107,7 +107,7 @@ Deno.serve(async (req) => {
          <p>Hi ${o.user_name}, your monthly payment of <b>${money}</b> for the group
          “${o.group_name}” (${o.month}) has not been confirmed yet. Please send it and
          mark it as paid in the app — reminders stop as soon as you do.</p>
-         <p><a href="${appUrl}">${appUrl}</a></p>`,
+         <p><a href="${appUrl}/#/group/${o.group_id}">${appUrl}/#/group/${o.group_id}</a></p>`,
       );
       await log({ ...base, channel: "email", ...res });
     });
@@ -116,7 +116,7 @@ Deno.serve(async (req) => {
       const res = await sendSms(
         o.phone,
         `Gameya: your payment of ${money} for "${o.group_name}" (${o.month}) is overdue. ` +
-        `Please send it and mark it paid in the app: ${appUrl}`,
+        `Please send it and mark it paid here: ${appUrl}/#/group/${o.group_id}`,
       );
       await log({ ...base, channel: "sms", ...res });
     });

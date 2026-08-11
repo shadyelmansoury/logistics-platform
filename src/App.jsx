@@ -22,6 +22,16 @@ const initialLang = () => {
   try { return localStorage.getItem(LANG_KEY) === 'en' ? 'en' : 'ar'; } catch { return 'ar'; }
 };
 
+// Deep links from SMS / notifications: #/group/{id}[/tab], #/admin, #/notifications
+const parseHash = () => {
+  const h = window.location.hash || '';
+  const m = h.match(/^#\/group\/([\w-]+)(?:\/(manage|payments|members|schedule))?$/);
+  if (m) return { name: 'group', id: m[1], tab: m[2] };
+  if (h === '#/admin') return { name: 'admin' };
+  if (h === '#/notifications') return { name: 'notifications' };
+  return null;
+};
+
 const initialTheme = () => {
   try {
     const saved = localStorage.getItem(THEME_KEY);
@@ -62,7 +72,16 @@ export default function App() {
   }, [theme]);
 
   const goHome = () => setView({ name: 'dashboard' });
-  const openGroup = (id) => setView({ name: 'group', id });
+  const openGroup = (id, tab) => setView({ name: 'group', id, tab });
+
+  // Apply an SMS deep link once the user is signed in and approved
+  const [deepRoute, setDeepRoute] = useState(parseHash);
+  useEffect(() => {
+    if (!deepRoute || !user || (!user.approved && user.role !== 'admin')) return;
+    setView(deepRoute);
+    setDeepRoute(null);
+    try { window.history.replaceState(null, '', window.location.pathname); } catch { /* noop */ }
+  }, [deepRoute, user]);
 
   return (
     <>
@@ -145,13 +164,15 @@ export default function App() {
       ) : view.name === 'account' ? (
         <Account user={user} s={s} onBack={goHome} />
       ) : view.name === 'notifications' ? (
-        <Notifications db={db} s={s} onOpenGroup={openGroup} onBack={goHome} />
+        <Notifications db={db} s={s} onOpenGroup={openGroup}
+          onOpenAdmin={() => setView(platformAdmin ? { name: 'admin' } : { name: 'dashboard' })}
+          onBack={goHome} />
       ) : view.name === 'admin' && platformAdmin ? (
         <AdminConsole db={db} user={user} s={s} lang={lang} onOpen={openGroup} onBack={goHome} />
       ) : view.name === 'create' && platformAdmin ? (
         <CreateGroup user={user} s={s} lang={lang} onDone={openGroup} onBack={goHome} />
       ) : view.name === 'group' ? (
-        <GroupDetail db={db} groupId={view.id} user={user} s={s} lang={lang} onBack={goHome} />
+        <GroupDetail db={db} groupId={view.id} initialTab={view.tab} user={user} s={s} lang={lang} onBack={goHome} />
       ) : (
         <Dashboard db={db} user={user} s={s} lang={lang}
           onOpen={openGroup} onCreate={() => setView({ name: 'create' })} />

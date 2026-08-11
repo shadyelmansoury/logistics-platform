@@ -679,8 +679,10 @@ function ManageTab({ g, s, platformAdmin, onDeleted }) {
 }
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
-export default function GroupDetail({ db, groupId, user, s, lang, onBack }) {
-  const [tab, setTab] = useState('schedule');
+export default function GroupDetail({ db, groupId, initialTab, user, s, lang, onBack }) {
+  const [tab, setTab] = useState(
+    ['schedule', 'payments', 'members', 'manage'].includes(initialTab) ? initialTab : 'schedule',
+  );
   const [changingMonth, setChangingMonth] = useState(false);
   const g = store.groupById(db, groupId);
   const gs = s.group;
