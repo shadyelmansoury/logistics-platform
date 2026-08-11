@@ -5,6 +5,7 @@ import * as store from './store.js';
 import Auth from './components/Auth.jsx';
 import MfaGate from './components/MfaGate.jsx';
 import SetPassword from './components/SetPassword.jsx';
+import PendingApproval from './components/PendingApproval.jsx';
 import Dashboard from './components/Dashboard.jsx';
 import CreateGroup from './components/CreateGroup.jsx';
 import GroupDetail from './components/GroupDetail.jsx';
@@ -139,6 +140,8 @@ export default function App() {
         <SetPassword s={s} />
       ) : !user ? (
         <Auth s={s} />
+      ) : !user.approved && user.role !== 'admin' ? (
+        <PendingApproval s={s} />
       ) : view.name === 'account' ? (
         <Account user={user} s={s} onBack={goHome} />
       ) : view.name === 'notifications' ? (
@@ -160,7 +163,7 @@ export default function App() {
       </footer>
 
       {/* Mobile bottom navigation */}
-      {user && !db.mfaPending && (
+      {user && (user.approved || user.role === 'admin') && !db.mfaPending && (
         <nav className="bottom-nav" aria-label={s.appName}>
           <div className="bottom-nav-inner">
             <button

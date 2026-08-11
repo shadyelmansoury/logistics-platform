@@ -711,6 +711,7 @@ export default function GroupDetail({ db, groupId, user, s, lang, onBack }) {
     }] : []),
   ].filter((tb) => !tb.memberOnly || member);
 
+  const canSeeDetails = Boolean(member) || admin || platformAdmin;
   const sharedWithNames = member?.month
     ? namesOf(db, store.recipientsOf(g, member.month).filter((m) => m.userId !== user.id))
     : '';
@@ -824,7 +825,13 @@ export default function GroupDetail({ db, groupId, user, s, lang, onBack }) {
         </div>
       )}
 
+      {/* Non-members see the summary only; details unlock on approval */}
+      {!canSeeDetails && (
+        <Empty icon={EyeOff} text={gs.lockedDetails} />
+      )}
+
       {/* Tabs */}
+      {canSeeDetails && (
       <div className="tabs" role="tablist">
         {tabs.map(({ id, label, Icon }) => (
           <button
@@ -840,14 +847,16 @@ export default function GroupDetail({ db, groupId, user, s, lang, onBack }) {
         ))}
       </div>
 
-      {tab === 'schedule' && <ScheduleTab g={g} user={user} s={s} lang={lang} />}
-      {tab === 'payments' && member && (
+      )}
+
+      {canSeeDetails && tab === 'schedule' && <ScheduleTab g={g} user={user} s={s} lang={lang} />}
+      {canSeeDetails && tab === 'payments' && member && (
         <PaymentsTab g={g} user={user} s={s} lang={lang} admin={admin || platformAdmin} frozen={frozen} />
       )}
-      {tab === 'members' && (
+      {canSeeDetails && tab === 'members' && (
         <MembersTab g={g} user={user} s={s} lang={lang} admin={admin || platformAdmin} onLeft={onBack} />
       )}
-      {tab === 'manage' && (admin || platformAdmin) && (
+      {canSeeDetails && tab === 'manage' && (admin || platformAdmin) && (
         <ManageTab g={g} s={s} platformAdmin={platformAdmin} onDeleted={onBack} />
       )}
     </div>

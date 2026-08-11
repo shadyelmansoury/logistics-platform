@@ -60,6 +60,7 @@ export async function register({ firstName, lastName, email, phone, etransferEma
     phone: phone.trim(),
     etransferEmail: (etransferEmail || normEmail).trim().toLowerCase(),
     role: 'member',
+    approved: true, // demo mode has no admin to approve registrations
     passwordHash: await hashPassword(password),
     createdAt: Date.now(),
   };
@@ -216,6 +217,11 @@ export function setGroupHidden(groupId, hidden) {
 
 export function setGroupDisabled(groupId, disabled) {
   patchGroup(groupId, (g) => ({ ...g, disabled }));
+}
+
+export function approveUser(userId) {
+  db.users = db.users.map((u) => (u.id === userId ? { ...u, approved: true } : u));
+  commit();
 }
 
 export function adminDeleteUser(userId) {

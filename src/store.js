@@ -50,6 +50,7 @@ export const pickMonth = (groupId, userId, month, share) => impl.pickMonth(group
 export const setGroupHidden = (groupId, hidden) => impl.setGroupHidden(groupId, hidden);
 export const setGroupDisabled = (groupId, disabled) => impl.setGroupDisabled(groupId, disabled);
 export const adminDeleteUser = (userId) => impl.adminDeleteUser(userId);
+export const approveUser = (userId) => impl.approveUser(userId);
 export const requestMonthChange = (groupId, userId, month, share) => impl.requestMonthChange(groupId, userId, month, share);
 export const cancelMonthChange = (groupId, userId) => impl.cancelMonthChange(groupId, userId);
 export const approveMonthChange = (groupId, userId) => impl.approveMonthChange(groupId, userId);

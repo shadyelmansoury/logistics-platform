@@ -63,6 +63,7 @@ async function refresh() {
     phone: p.phone,
     etransferEmail: p.etransfer_email,
     role: p.role || 'member',
+    approved: Boolean(p.approved) || p.role === 'admin',
     createdAt: ts(p.created_at),
   }));
 
@@ -405,6 +406,10 @@ export function setGroupHidden(groupId, hidden) {
 
 export function setGroupDisabled(groupId, disabled) {
   run(sb.from('groups').update({ disabled }).eq('id', groupId)).catch(() => {});
+}
+
+export function approveUser(userId) {
+  run(sb.from('profiles').update({ approved: true }).eq('id', userId)).catch(() => {});
 }
 
 export async function adminDeleteUser(userId) {

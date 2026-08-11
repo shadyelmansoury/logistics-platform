@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import {
   ArrowLeft, ShieldAlert, Users, Layers, Activity, Eye, EyeOff,
-  PauseCircle, PlayCircle, Trash2, Crown,
+  PauseCircle, PlayCircle, Trash2, Crown, Hourglass, BadgeCheck,
 } from 'lucide-react';
 import { Card, Btn, Badge, SectionTitle, Avatar, Empty, ConfirmDialog } from './ui.jsx';
 import { monthLabel, fmtMoney, t } from '../i18n.js';
@@ -52,6 +52,32 @@ export default function AdminConsole({ db, user, s, lang, onOpen, onBack }) {
           </div>
         ))}
       </div>
+
+      {/* Pending registrations */}
+      <section className="stack-sm">
+        <SectionTitle><Hourglass size={13} /> {ac.pendingUsers}</SectionTitle>
+        {db.users.filter((u) => !u.approved && u.role !== 'admin').length === 0 ? (
+          <Empty icon={BadgeCheck} text={ac.noPendingUsers} />
+        ) : (
+          db.users.filter((u) => !u.approved && u.role !== 'admin').map((u) => (
+            <div key={u.id} className="member-row">
+              <Avatar name={u.name} size={38} />
+              <div className="member-main">
+                <div className="member-name"><span>{u.name}</span></div>
+                <div className="member-sub member-contact">
+                  {[u.email, u.phone].filter(Boolean).join(' · ')}
+                </div>
+              </div>
+              <Btn size="sm" onClick={() => store.approveUser(u.id)}>
+                <BadgeCheck size={13} /> {ac.approveUser}
+              </Btn>
+              <Btn size="sm" variant="danger" onClick={() => setConfirming({ type: 'user', id: u.id })}>
+                <Trash2 size={13} /> {ac.delete}
+              </Btn>
+            </div>
+          ))
+        )}
+      </section>
 
       {/* Groups */}
       <section className="stack-sm">

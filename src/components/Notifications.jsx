@@ -1,4 +1,4 @@
-import { ArrowLeft, Bell, Wallet, ShieldAlert, UserPlus, UserCheck } from 'lucide-react';
+import { ArrowLeft, Bell, Wallet, ShieldAlert, UserPlus, UserCheck, BadgeCheck, Hourglass } from 'lucide-react';
 import { Btn, Empty, SectionTitle } from './ui.jsx';
 import { t } from '../i18n.js';
 import * as store from '../store.js';
@@ -8,6 +8,9 @@ const KIND_META = {
   overdue_admin: { Icon: ShieldAlert, variant: 'danger', key: 'overdueAdmin' },
   join_request: { Icon: UserPlus, variant: 'info', key: 'joinRequest' },
   member_joined: { Icon: UserCheck, variant: 'primary', key: 'memberJoined' },
+  join_approved: { Icon: BadgeCheck, variant: 'primary', key: 'joinApproved' },
+  account_pending: { Icon: Hourglass, variant: 'info', key: 'accountPending' },
+  account_approved: { Icon: BadgeCheck, variant: 'primary', key: 'accountApproved' },
 };
 
 export default function Notifications({ db, s, onOpenGroup, onBack }) {
