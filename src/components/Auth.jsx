@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { HandCoins, Users, CalendarCheck, Landmark } from 'lucide-react';
-import { Card, Btn, Field, Input, ErrorBox, InfoBox, Logo } from './ui.jsx';
+import { Card, Btn, Field, Input, ErrorBox, InfoBox, Logo, PhoneInput } from './ui.jsx';
 import * as store from '../store.js';
 
 export default function Auth({ s }) {
@@ -104,7 +104,8 @@ export default function Auth({ s }) {
                     </Field>
                   </div>
                   <Field label={a.phone}>
-                    <Input value={form.phone} onChange={set('phone')} autoComplete="tel" dir="ltr" inputMode="tel" />
+                    <PhoneInput value={form.phone} countries={s.countries} ariaLabel={a.phone}
+                      onChange={(v) => setForm((f) => ({ ...f, phone: v }))} />
                   </Field>
                 </>
               )}

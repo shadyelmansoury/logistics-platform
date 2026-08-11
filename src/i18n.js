@@ -176,6 +176,11 @@ export const S = {
       demoMode: 'Demo mode — data is stored in this browser only',
     },
     currencies: { EGP: 'EGP', USD: 'USD', EUR: 'EUR', SAR: 'SAR', AED: 'AED' },
+    countries: {
+      CA: 'Canada', US: 'United States', EG: 'Egypt', GB: 'United Kingdom',
+      AE: 'UAE', SA: 'Saudi Arabia', KW: 'Kuwait', QA: 'Qatar', BH: 'Bahrain',
+      JO: 'Jordan', LB: 'Lebanon', DE: 'Germany', FR: 'France', AU: 'Australia',
+    },
   },
 
   ar: {
@@ -354,6 +359,11 @@ export const S = {
       demoMode: 'وضع تجريبي — البيانات محفوظة في المتصفح ده بس',
     },
     currencies: { EGP: 'ج.م', USD: 'دولار', EUR: 'يورو', SAR: 'ر.س', AED: 'د.إ' },
+    countries: {
+      CA: 'كندا', US: 'الولايات المتحدة', EG: 'مصر', GB: 'المملكة المتحدة',
+      AE: 'الإمارات', SA: 'السعودية', KW: 'الكويت', QA: 'قطر', BH: 'البحرين',
+      JO: 'الأردن', LB: 'لبنان', DE: 'ألمانيا', FR: 'فرنسا', AU: 'أستراليا',
+    },
   },
 };
 

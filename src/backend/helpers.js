@@ -16,10 +16,15 @@ export function monthsOf(group) {
   });
 }
 
-export const nowMonth = () => {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-};
+// All schedule math runs on Toronto time (America/Toronto) no matter where
+// the viewer's device is — the same clock the daily reminder job uses.
+const APP_TZ = 'America/Toronto';
+const todayInAppTz = () =>
+  new Intl.DateTimeFormat('en-CA', {
+    timeZone: APP_TZ, year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(new Date()); // YYYY-MM-DD
+
+export const nowMonth = () => todayInAppTz().slice(0, 7);
 
 // ─── Shares & split months ────────────────────────────────────────────────────
 // A member holds a full month (share 1) or splits a month with one other
@@ -75,8 +80,9 @@ export const hasPaid = (group, month, userId) => Boolean(group.payments[month]?.
 export const unpaidPayers = (group, month) =>
   group.members.filter((m) => m.month !== month && !hasPaid(group, month, m.userId));
 
-// Payments are due on the 1st; from the 2nd onward an unpaid member is overdue.
-export const isPastGraceDay = (date = new Date()) => date.getDate() >= 2;
+// Payments are due on the 1st; from the 2nd onward (Toronto time) an unpaid
+// member is overdue.
+export const isPastGraceDay = () => Number(todayInAppTz().slice(8, 10)) >= 2;
 
 // Returns the overdue month for this member in this group, or null.
 export const memberOverdueMonth = (group, userId) => {

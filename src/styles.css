@@ -752,6 +752,10 @@ textarea.input { min-height: 0; resize: vertical; line-height: 1.5; }
 
 .label-icon { display: inline-flex; align-items: center; gap: 6px; }
 
+.phone-input { display: flex; gap: 8px; }
+.phone-input .phone-cc { flex: 0 0 auto; width: 45%; min-width: 140px; max-width: 210px; }
+.phone-input .input:not(.phone-cc) { flex: 1; min-width: 0; }
+
 .mfa-enroll {
   display: flex;
   flex-direction: column;

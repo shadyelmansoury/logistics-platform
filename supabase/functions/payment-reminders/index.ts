@@ -35,7 +35,10 @@ Deno.serve(async (req) => {
   const appUrl = Deno.env.get("APP_URL") ?? "https://gam3ya-app.netlify.app";
 
   // Already-sent (kind|channel|group|user|month) for today — don't repeat.
-  const today = new Date().toISOString().slice(0, 10);
+  // "Today" is Toronto time, matching the app and the overdue_payers() SQL.
+  const today = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Toronto", year: "numeric", month: "2-digit", day: "2-digit",
+  }).format(new Date());
   const { data: sentRows } = await sb.from("notification_log")
     .select("kind, channel, group_id, user_id, month").eq("sent_on", today);
   const sent = new Set((sentRows ?? []).map((r) =>

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { ArrowLeft, ShieldCheck, Shield, UserRound, Landmark } from 'lucide-react';
-import { Card, Btn, Field, Input, ErrorBox, InfoBox, SectionTitle, ConfirmDialog } from './ui.jsx';
+import { Card, Btn, Field, Input, ErrorBox, InfoBox, SectionTitle, ConfirmDialog, PhoneInput } from './ui.jsx';
 import * as store from '../store.js';
 
 // ─── 2FA management ───────────────────────────────────────────────────────────
@@ -183,7 +183,8 @@ export default function Account({ user, s, onBack }) {
             </Field>
           </div>
           <Field label={a.phone}>
-            <Input value={form.phone} onChange={set('phone')} autoComplete="tel" dir="ltr" inputMode="tel" />
+            <PhoneInput value={form.phone} countries={s.countries} ariaLabel={a.phone}
+              onChange={(v) => setForm((f) => ({ ...f, phone: v }))} />
           </Field>
           <Field label={a.email} hint={ac.emailNote}>
             <Input value={user.email} disabled dir="ltr" />

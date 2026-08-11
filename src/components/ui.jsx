@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 
 // ─── Brand mark (same drawing as public/favicon.svg) ──────────────────────────
 export const Logo = ({ size = 34 }) => (
@@ -76,6 +76,71 @@ export const Empty = ({ icon: Icon, text }) => (
     <div className="empty-text">{text}</div>
   </div>
 );
+
+// ─── Phone input with country dial-code selector ──────────────────────────────
+// Stores the full number in international format (+14165551234), which the
+// SMS reminder engine requires.
+
+export const DIAL_CODES = [
+  { key: 'CA', code: '+1' },
+  { key: 'US', code: '+1' },
+  { key: 'EG', code: '+20' },
+  { key: 'GB', code: '+44' },
+  { key: 'AE', code: '+971' },
+  { key: 'SA', code: '+966' },
+  { key: 'KW', code: '+965' },
+  { key: 'QA', code: '+974' },
+  { key: 'BH', code: '+973' },
+  { key: 'JO', code: '+962' },
+  { key: 'LB', code: '+961' },
+  { key: 'DE', code: '+49' },
+  { key: 'FR', code: '+33' },
+  { key: 'AU', code: '+61' },
+];
+
+const parsePhone = (value) => {
+  if (!value) return { key: 'CA', national: '' };
+  const sorted = [...DIAL_CODES].sort((a, b) => b.code.length - a.code.length);
+  const hit = sorted.find((c) => value.startsWith(c.code));
+  if (hit) return { key: hit.key, national: value.slice(hit.code.length) };
+  return { key: 'CA', national: value.replace(/^\+/, '') };
+};
+
+export function PhoneInput({ value, onChange, countries, ariaLabel }) {
+  const [key, setKey] = useState(() => parsePhone(value).key);
+  const national = parsePhone(value).national;
+
+  const emit = (k, nat) => {
+    const digits = (nat || '').replace(/\D/g, '');
+    const code = DIAL_CODES.find((c) => c.key === k)?.code || '+1';
+    onChange(digits ? code + digits : '');
+  };
+
+  return (
+    <div className="phone-input">
+      <select
+        className="input phone-cc"
+        value={key}
+        onChange={(e) => { setKey(e.target.value); emit(e.target.value, national); }}
+        aria-label={ariaLabel}
+      >
+        {DIAL_CODES.map((c) => (
+          <option key={c.key} value={c.key}>
+            {(countries?.[c.key] || c.key)} ({c.code})
+          </option>
+        ))}
+      </select>
+      <Input
+        type="tel"
+        inputMode="tel"
+        dir="ltr"
+        autoComplete="tel-national"
+        value={national}
+        onChange={(e) => emit(key, e.target.value)}
+      />
+    </div>
+  );
+}
 
 // ─── Confirm dialog (replaces window.confirm) ─────────────────────────────────
 
