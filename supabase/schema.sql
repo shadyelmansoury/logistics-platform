@@ -199,8 +199,10 @@ create policy "groups_select" on public.groups
     or exists (select 1 from public.join_requests jr
                where jr.group_id = id and jr.user_id = auth.uid())
   );
+-- Only platform admins can create groups (they become the group's admin).
 create policy "groups_insert_own" on public.groups
-  for insert to authenticated with check (admin_id = auth.uid());
+  for insert to authenticated
+  with check (admin_id = auth.uid() and public.is_platform_admin());
 create policy "groups_update_admin" on public.groups
   for update to authenticated
   using (admin_id = auth.uid() or public.is_platform_admin());
@@ -289,8 +291,103 @@ create policy "mfa_join_requests" on public.join_requests
 create policy "mfa_payments" on public.payments
   as restrictive for all to authenticated using (public.mfa_ok());
 
+-- ─── Month-change requests (changes after confirmation need admin approval) ──
+
+create table public.month_change_requests (
+  group_id uuid not null references public.groups(id) on delete cascade,
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  month text not null check (month ~ '^\d{4}-\d{2}$'),
+  share numeric not null default 1 check (share in (0.5, 1)),
+  requested_at timestamptz not null default now(),
+  primary key (group_id, user_id)
+);
+
+alter table public.month_change_requests enable row level security;
+
+create policy "mcr_select" on public.month_change_requests
+  for select to authenticated using (true);
+create policy "mcr_insert_own" on public.month_change_requests
+  for insert to authenticated with check (
+    user_id = auth.uid()
+    and exists (select 1 from public.group_members gm
+                where gm.group_id = month_change_requests.group_id
+                  and gm.user_id = auth.uid())
+    and not exists (select 1 from public.groups g
+                    where g.id = group_id and g.disabled)
+  );
+create policy "mcr_delete" on public.month_change_requests
+  for delete to authenticated using (
+    user_id = auth.uid()
+    or public.is_group_admin(group_id)
+    or public.is_platform_admin()
+  );
+create policy "mfa_mcr" on public.month_change_requests
+  as restrictive for all to authenticated using (public.mfa_ok());
+
+-- ─── Notification log (in-app alert history + delivery audit) ─────────────────
+
+create table public.notification_log (
+  id uuid primary key default gen_random_uuid(),
+  kind text not null check (kind in ('overdue_user', 'overdue_admin')),
+  group_id uuid references public.groups(id) on delete cascade,
+  user_id uuid references public.profiles(id) on delete cascade,
+  month text,
+  channel text not null check (channel in ('inapp', 'email', 'sms')),
+  status text not null default 'sent',
+  detail text not null default '',
+  sent_on date not null default current_date,
+  created_at timestamptz not null default now()
+);
+
+alter table public.notification_log enable row level security;
+
+create policy "nlog_select" on public.notification_log
+  for select to authenticated using (
+    user_id = auth.uid()
+    or public.is_group_admin(group_id)
+    or public.is_platform_admin()
+  );
+
+create unique index nlog_dedupe
+  on public.notification_log (kind, channel, group_id, user_id, month, sent_on);
+
+-- ─── Overdue payers (queried daily by the payment-reminders edge function) ───
+
+create or replace function public.overdue_payers()
+returns table (
+  group_id uuid, group_name text, amount numeric, currency text,
+  admin_id uuid, month text,
+  user_id uuid, user_name text, email text, phone text, share numeric
+)
+language sql stable security definer set search_path = public
+as $$
+  with cur as (select to_char(current_date, 'YYYY-MM') as ym)
+  select g.id, g.name, g.amount * gm.share, g.currency,
+         g.admin_id, cur.ym,
+         p.id, p.name, p.email, p.phone, gm.share
+  from public.groups g
+  cross join cur
+  join public.group_members gm on gm.group_id = g.id
+  join public.profiles p on p.id = gm.user_id
+  where not g.disabled
+    and extract(day from current_date) >= 2
+    and cur.ym >= g.start_month
+    and cur.ym < to_char((to_date(g.start_month || '-01', 'YYYY-MM-DD')
+                          + make_interval(months => g.max_members)), 'YYYY-MM')
+    and (gm.month is null or gm.month <> cur.ym)
+    and not exists (
+      select 1 from public.payments pay
+      where pay.group_id = g.id and pay.month = cur.ym and pay.payer_id = gm.user_id
+    );
+$$;
+
+revoke all on function public.overdue_payers() from public;
+
+-- Daily reminders: deploy supabase/functions/payment-reminders and schedule it
+-- with pg_cron + pg_net (see README "Payment reminders" for the exact steps).
+
 -- ─── Realtime: push table changes to connected clients ────────────────────────
 
 alter publication supabase_realtime add table
   public.profiles, public.groups, public.group_members,
-  public.join_requests, public.payments;
+  public.join_requests, public.payments, public.month_change_requests;

@@ -35,14 +35,15 @@ async function refresh() {
     notify();
     return;
   }
-  const [profiles, groups, members, requests, payments] = await Promise.all([
+  const [profiles, groups, members, requests, payments, changeReqs] = await Promise.all([
     sb.from('profiles').select('*'),
     sb.from('groups').select('*'),
     sb.from('group_members').select('*'),
     sb.from('join_requests').select('*'),
     sb.from('payments').select('*'),
+    sb.from('month_change_requests').select('*'),
   ]);
-  const firstError = [profiles, groups, members, requests, payments].find((r) => r.error)?.error;
+  const firstError = [profiles, groups, members, requests, payments, changeReqs].find((r) => r.error)?.error;
   if (firstError) {
     console.error('Gameea refresh failed:', firstError.message);
     db = { ...db, loading: false };
@@ -72,6 +73,12 @@ async function refresh() {
   for (const r of requests.data || []) {
     (requestsByGroup[r.group_id] ||= []).push({ userId: r.user_id, requestedAt: ts(r.requested_at) });
   }
+  const changesByGroup = {};
+  for (const c of changeReqs.data || []) {
+    (changesByGroup[c.group_id] ||= []).push({
+      userId: c.user_id, month: c.month, share: Number(c.share) || 1, requestedAt: ts(c.requested_at),
+    });
+  }
   const paymentsByGroup = {};
   for (const p of payments.data || []) {
     const byMonth = (paymentsByGroup[p.group_id] ||= {});
@@ -92,6 +99,7 @@ async function refresh() {
     createdAt: ts(g.created_at),
     members: (membersByGroup[g.id] || []).sort((a, b) => a.joinedAt - b.joinedAt),
     joinRequests: requestsByGroup[g.id] || [],
+    monthChangeRequests: changesByGroup[g.id] || [],
     payments: paymentsByGroup[g.id] || {},
   }));
 
@@ -328,6 +336,38 @@ export function pickMonth(groupId, userId, month, share = 1) {
     sb.from('group_members').update({ month, share: grantedShare })
       .eq('group_id', groupId).eq('user_id', userId),
   ).catch(() => {});
+}
+
+export function requestMonthChange(groupId, userId, month, share = 1) {
+  (async () => {
+    await sb.from('month_change_requests').delete()
+      .eq('group_id', groupId).eq('user_id', userId);
+    await run(sb.from('month_change_requests').insert({
+      group_id: groupId, user_id: userId, month, share,
+    }));
+  })().catch(() => {});
+}
+
+export function cancelMonthChange(groupId, userId) {
+  run(sb.from('month_change_requests').delete()
+    .eq('group_id', groupId).eq('user_id', userId)).catch(() => {});
+}
+
+export function approveMonthChange(groupId, userId) {
+  const g = groupById(db, groupId);
+  const req = g?.monthChangeRequests?.find((r) => r.userId === userId);
+  if (!req) return;
+  const granted = validateMonthPick(g, userId, req.month, req.share); // throws 'monthFull'
+  (async () => {
+    await run(sb.from('group_members').update({ month: req.month, share: granted })
+      .eq('group_id', groupId).eq('user_id', userId));
+    await run(sb.from('month_change_requests').delete()
+      .eq('group_id', groupId).eq('user_id', userId));
+  })().catch(() => {});
+}
+
+export function rejectMonthChange(groupId, userId) {
+  cancelMonthChange(groupId, userId);
 }
 
 export function setGroupHidden(groupId, hidden) {

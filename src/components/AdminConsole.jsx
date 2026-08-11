@@ -4,7 +4,7 @@ import {
   PauseCircle, PlayCircle, Trash2, Crown,
 } from 'lucide-react';
 import { Card, Btn, Badge, SectionTitle, Avatar, Empty, ConfirmDialog } from './ui.jsx';
-import { monthLabel, fmtMoney } from '../i18n.js';
+import { monthLabel, fmtMoney, t } from '../i18n.js';
 import * as store from '../store.js';
 
 const STATUS_VARIANT = { forming: 'gold', active: 'primary', completed: 'muted' };
@@ -65,6 +65,9 @@ export default function AdminConsole({ db, user, s, lang, onOpen, onBack }) {
           db.groups.map((g) => {
             const status = store.groupStatus(g);
             const adminUser = store.userById(db, g.adminId);
+            const due = store.currentDueMonth(g);
+            const payersTotal = due ? g.members.filter((m) => m.month !== due).length : 0;
+            const paidNow = due ? payersTotal - store.unpaidPayers(g, due).length : 0;
             return (
               <div key={g.id} className="member-row">
                 <Avatar name={g.name} size={38} />
@@ -77,6 +80,7 @@ export default function AdminConsole({ db, user, s, lang, onOpen, onBack }) {
                   </div>
                   <div className="member-sub">
                     {gs.adminLabel}: {adminUser?.name || '—'} · {g.members.length} {s.dash.members} · {fmtMoney(g.amount, g.currency, lang)} {s.dash.monthly} · {s.dash.starts} {monthLabel(g.startMonth, s.locale)}
+                    {due && payersTotal > 0 ? ` · ${t(ac.paidCount, { p: paidNow, t: payersTotal })}` : ''}
                   </div>
                 </div>
                 <div className="row-actions">

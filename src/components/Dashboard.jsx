@@ -1,6 +1,6 @@
-import { Users, Plus, Search, Crown, Hourglass, CalendarPlus, EyeOff, PauseCircle } from 'lucide-react';
+import { Users, Plus, Search, Crown, Hourglass, CalendarPlus, EyeOff, PauseCircle, BellRing, Wallet, CheckCircle2, UserPlus, CalendarDays } from 'lucide-react';
 import { Card, Btn, Badge, SectionTitle, Empty, Avatar } from './ui.jsx';
-import { monthLabel, fmtMoney } from '../i18n.js';
+import { monthLabel, fmtMoney, t } from '../i18n.js';
 import * as store from '../store.js';
 
 const STATUS_VARIANT = { forming: 'gold', active: 'primary', completed: 'muted' };
@@ -70,6 +70,80 @@ function GroupCard({ g, user, s, lang, onOpen }) {
   );
 }
 
+function AttentionCard({ db, user, s, onOpen }) {
+  const items = store.adminAttention(db, user.id);
+  if (items.length === 0) return null;
+  return (
+    <Card className="card-gold">
+      <div className="stack" style={{ gap: 10 }}>
+        <SectionTitle><BellRing size={13} /> {s.dash.alertsTitle}</SectionTitle>
+        {items.map(({ group, joins, changes, unpaid }) => (
+          <div key={group.id} className="member-row" style={{ background: 'var(--surface)' }}>
+            <div className="member-main">
+              <div className="member-name">{group.name}</div>
+              <div className="member-sub" style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 4 }}>
+                {joins > 0 && <Badge variant="info"><UserPlus size={11} /> {t(s.dash.alertJoins, { n: joins })}</Badge>}
+                {changes > 0 && <Badge variant="info"><CalendarDays size={11} /> {t(s.dash.alertChanges, { n: changes })}</Badge>}
+                {unpaid > 0 && <Badge variant="danger"><Wallet size={11} /> {t(s.dash.alertUnpaid, { n: unpaid })}</Badge>}
+              </div>
+            </div>
+            <Btn size="sm" onClick={() => onOpen(group.id)}>{s.dash.review}</Btn>
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
+function DueSection({ db, user, s, lang, onOpen }) {
+  const gs = s.group;
+  const dues = db.groups
+    .map((g) => ({ g, me: store.memberOf(g, user.id), due: store.currentDueMonth(g) }))
+    .filter(({ g, me, due }) => me && due && !g.disabled && me.month !== due);
+  if (dues.length === 0) return null;
+  return (
+    <section>
+      <div className="head-row" style={{ marginBottom: 12 }}>
+        <SectionTitle><Wallet size={13} /> {s.dash.dueSection}</SectionTitle>
+      </div>
+      <div className="stack-sm">
+        {dues.map(({ g, me, due }) => {
+          const paid = store.hasPaid(g, due, user.id);
+          const overdue = !paid && store.isPastGraceDay();
+          const recips = store.recipientsOf(g, due);
+          const names = recips.map((r) => store.userById(db, r.userId)?.name || '?').join(' + ');
+          const amount = fmtMoney(store.duesOf(g, me), g.currency, lang);
+          return (
+            <div key={g.id} className="member-row"
+              style={overdue ? { borderColor: 'var(--danger-border)' } : undefined}>
+              {paid
+                ? <CheckCircle2 size={18} style={{ color: 'var(--primary)', flexShrink: 0 }} />
+                : <Wallet size={18} style={{ color: overdue ? 'var(--danger)' : 'var(--primary)', flexShrink: 0 }} />}
+              <div className="member-main">
+                <div className="member-name">
+                  <span>{g.name}</span>
+                  {overdue && <Badge variant="danger">{gs.overdueTitle}</Badge>}
+                  {paid && <Badge variant="primary">{gs.duePaid}</Badge>}
+                </div>
+                <div className="member-sub">
+                  {paid ? monthLabel(due, s.locale) : t(gs.dueSend, { amount, name: names || '—' })}
+                </div>
+              </div>
+              {!paid && (
+                <Btn size="sm" variant={overdue ? 'solid-danger' : 'primary'}
+                  onClick={() => store.togglePaid(g.id, due, user.id)}>
+                  <CheckCircle2 size={13} /> {gs.confirmPaid}
+                </Btn>
+              )}
+              <Btn size="sm" variant="ghost" onClick={() => onOpen(g.id)}>{s.dash.open}</Btn>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
 export default function Dashboard({ db, user, s, lang, onOpen, onCreate }) {
   const platformAdmin = store.isPlatformAdmin(db, user.id);
   const mine = db.groups.filter((g) => store.memberOf(g, user.id) || store.hasRequested(g, user.id));
@@ -81,13 +155,16 @@ export default function Dashboard({ db, user, s, lang, onOpen, onCreate }) {
 
   return (
     <div className="page stack" style={{ gap: 30 }}>
+      <AttentionCard db={db} user={user} s={s} onOpen={onOpen} />
+      <DueSection db={db} user={user} s={s} lang={lang} onOpen={onOpen} />
+
       <section>
         <div className="head-row" style={{ marginBottom: 12 }}>
           <SectionTitle><Users size={13} /> {s.dash.myGroups}</SectionTitle>
-          <Btn size="sm" onClick={onCreate}><Plus size={14} /> {s.nav.newGroup}</Btn>
+          {platformAdmin && <Btn size="sm" onClick={onCreate}><Plus size={14} /> {s.nav.newGroup}</Btn>}
         </div>
         {mine.length === 0 ? (
-          <Empty icon={Users} text={s.dash.empty} />
+          <Empty icon={Users} text={platformAdmin ? s.dash.empty : `${s.dash.empty} ${s.dash.onlyAdminCreates}`} />
         ) : (
           <div className="grid-cards">
             {mine.map((g) => <GroupCard key={g.id} g={g} user={user} s={s} lang={lang} onOpen={onOpen} />)}

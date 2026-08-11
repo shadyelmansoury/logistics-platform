@@ -15,6 +15,8 @@ export {
   memberOf, isAdmin, hasRequested,
   shareOf, recipientsOf, monthShareTotal, duesOf, potOf, recipientCut,
   openMonths, isGroupFull, isPlatformAdmin,
+  currentDueMonth, hasPaid, unpaidPayers, isPastGraceDay, memberOverdueMonth,
+  monthChangeOf, adminAttention,
 } from './backend/helpers.js';
 
 const impl = supa.hasSupabase ? supa : local;
@@ -45,6 +47,10 @@ export const pickMonth = (groupId, userId, month, share) => impl.pickMonth(group
 export const setGroupHidden = (groupId, hidden) => impl.setGroupHidden(groupId, hidden);
 export const setGroupDisabled = (groupId, disabled) => impl.setGroupDisabled(groupId, disabled);
 export const adminDeleteUser = (userId) => impl.adminDeleteUser(userId);
+export const requestMonthChange = (groupId, userId, month, share) => impl.requestMonthChange(groupId, userId, month, share);
+export const cancelMonthChange = (groupId, userId) => impl.cancelMonthChange(groupId, userId);
+export const approveMonthChange = (groupId, userId) => impl.approveMonthChange(groupId, userId);
+export const rejectMonthChange = (groupId, userId) => impl.rejectMonthChange(groupId, userId);
 export const removeMember = (groupId, userId) => impl.removeMember(groupId, userId);
 export const updateGroup = (groupId, patch) => impl.updateGroup(groupId, patch);
 export const deleteGroup = (groupId) => impl.deleteGroup(groupId);

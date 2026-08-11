@@ -116,7 +116,7 @@ export default function App() {
         <Account user={user} s={s} onBack={goHome} />
       ) : view.name === 'admin' && platformAdmin ? (
         <AdminConsole db={db} user={user} s={s} lang={lang} onOpen={openGroup} onBack={goHome} />
-      ) : view.name === 'create' ? (
+      ) : view.name === 'create' && platformAdmin ? (
         <CreateGroup user={user} s={s} lang={lang} onDone={openGroup} onBack={goHome} />
       ) : view.name === 'group' ? (
         <GroupDetail db={db} groupId={view.id} user={user} s={s} lang={lang} onBack={goHome} />
@@ -141,13 +141,15 @@ export default function App() {
               <Home size={19} />
               <span>{s.nav.home}</span>
             </button>
-            <button
-              className={`bottom-nav-item${view.name === 'create' ? ' is-active' : ''}`}
-              onClick={() => setView({ name: 'create' })}
-            >
-              <Plus size={19} />
-              <span>{s.nav.newGroup}</span>
-            </button>
+            {platformAdmin && (
+              <button
+                className={`bottom-nav-item${view.name === 'create' ? ' is-active' : ''}`}
+                onClick={() => setView({ name: 'create' })}
+              >
+                <Plus size={19} />
+                <span>{s.nav.newGroup}</span>
+              </button>
+            )}
             {platformAdmin && (
               <button
                 className={`bottom-nav-item${view.name === 'admin' ? ' is-active' : ''}`}

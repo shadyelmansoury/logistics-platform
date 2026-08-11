@@ -61,6 +61,54 @@ export function groupStatus(group) {
   return 'active';
 }
 
+// ─── Payment dues & overdue tracking ──────────────────────────────────────────
+
+// The schedule month currently being collected (null when the group hasn't
+// started or has finished).
+export const currentDueMonth = (group) => {
+  const now = nowMonth();
+  return monthsOf(group).includes(now) ? now : null;
+};
+
+export const hasPaid = (group, month, userId) => Boolean(group.payments[month]?.[userId]);
+
+export const unpaidPayers = (group, month) =>
+  group.members.filter((m) => m.month !== month && !hasPaid(group, month, m.userId));
+
+// Payments are due on the 1st; from the 2nd onward an unpaid member is overdue.
+export const isPastGraceDay = (date = new Date()) => date.getDate() >= 2;
+
+// Returns the overdue month for this member in this group, or null.
+export const memberOverdueMonth = (group, userId) => {
+  if (group.disabled) return null;
+  const due = currentDueMonth(group);
+  if (!due || !isPastGraceDay()) return null;
+  const m = memberOf(group, userId);
+  if (!m || m.month === due) return null;
+  return hasPaid(group, due, userId) ? null : due;
+};
+
+// ─── Month-change requests (post-confirmation changes need admin approval) ───
+
+export const monthChangeOf = (group, userId) =>
+  (group.monthChangeRequests || []).find((r) => r.userId === userId) || null;
+
+// ─── Group-admin attention queue ──────────────────────────────────────────────
+
+export function adminAttention(d, userId) {
+  const groups = d.groups.filter((g) => g.adminId === userId);
+  return groups.map((g) => {
+    const due = currentDueMonth(g);
+    const unpaid = due && isPastGraceDay() ? unpaidPayers(g, due).length : 0;
+    return {
+      group: g,
+      joins: g.joinRequests.length,
+      changes: (g.monthChangeRequests || []).length,
+      unpaid,
+    };
+  }).filter((a) => a.joins + a.changes + a.unpaid > 0);
+}
+
 // ─── Lookups ──────────────────────────────────────────────────────────────────
 
 export const currentUser = (d) => d.users.find((u) => u.id === d.session) || null;

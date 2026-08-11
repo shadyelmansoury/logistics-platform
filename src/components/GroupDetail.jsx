@@ -64,13 +64,14 @@ function Header({ g, s, lang, admin, platformAdmin, me }) {
 }
 
 // ─── Month picker (supports full and half shares) ─────────────────────────────
-function MonthPicker({ g, user, s, lang, onPicked }) {
+function MonthPicker({ g, user, s, lang, mode = 'pick', onPicked }) {
   const [selected, setSelected] = useState(null);
   const [shareChoice, setShareChoice] = useState('full');
   const gs = s.group;
   const months = store.monthsOf(g);
   const me = store.memberOf(g, user.id);
   const d = store.getDB();
+  const isRequest = mode === 'request';
 
   const selectedOthers = selected
     ? store.recipientsOf(g, selected).filter((m) => m.userId !== user.id)
@@ -84,9 +85,9 @@ function MonthPicker({ g, user, s, lang, onPicked }) {
         <div>
           <div className="group-card-title" style={{ fontSize: 17 }}>
             <CalendarDays size={17} style={{ color: 'var(--primary)' }} />
-            <span>{me.month ? gs.changeMonth : gs.pickTitle}</span>
+            <span>{isRequest ? gs.requestChangeTitle : gs.pickTitle}</span>
           </div>
-          <p className="field-hint" style={{ marginTop: 4 }}>{gs.pickHint}</p>
+          <p className="field-hint" style={{ marginTop: 4 }}>{isRequest ? gs.requestChangeHint : gs.pickHint}</p>
           <p className="field-hint" style={{ marginTop: 4 }}>{gs.shareHint}</p>
         </div>
 
@@ -137,12 +138,77 @@ function MonthPicker({ g, user, s, lang, onPicked }) {
         {selected && (
           <Btn size="lg" block
             onClick={() => {
-              store.pickMonth(g.id, user.id, selected, effectiveShare);
+              if (isRequest) store.requestMonthChange(g.id, user.id, selected, effectiveShare);
+              else store.pickMonth(g.id, user.id, selected, effectiveShare);
               setSelected(null);
               onPicked?.();
             }}>
-            {gs.confirmPick} — {monthLabel(selected, s.locale)}
+            {isRequest ? gs.requestChangeCta : gs.confirmPick} — {monthLabel(selected, s.locale)}
             {effectiveShare === 0.5 ? ` (${gs.shareHalf})` : ''}
+          </Btn>
+        )}
+      </div>
+    </Card>
+  );
+}
+
+// ─── This month's due payment (member quick-confirm) ─────────────────────────
+function DueCard({ g, user, s, lang }) {
+  const d = store.getDB();
+  const gs = s.group;
+  const due = store.currentDueMonth(g);
+  const me = store.memberOf(g, user.id);
+  if (!due || !me || g.disabled) return null;
+
+  if (me.month === due) {
+    return (
+      <div className="banner banner-gold">
+        <HandCoins size={15} style={{ color: 'var(--gold)', flexShrink: 0 }} />
+        <div className="banner-main"><span className="banner-title">{gs.dueYourTurn}</span></div>
+      </div>
+    );
+  }
+
+  const paid = store.hasPaid(g, due, user.id);
+  const overdue = !paid && store.isPastGraceDay();
+  const recips = store.recipientsOf(g, due);
+  const amount = fmtMoney(store.duesOf(g, me), g.currency, lang);
+
+  return (
+    <Card className={overdue ? 'card-danger-outline' : paid ? '' : 'card-primary'}>
+      <div className="banner" style={{ padding: 0 }}>
+        {paid
+          ? <CheckCircle2 size={22} style={{ color: 'var(--primary)', flexShrink: 0 }} />
+          : <Wallet size={22} style={{ color: overdue ? 'var(--danger)' : 'var(--primary)', flexShrink: 0 }} />}
+        <div className="banner-main">
+          <div className="banner-title" style={overdue ? { color: 'var(--danger)' } : undefined}>
+            {overdue ? gs.overdueTitle : t(gs.dueTitle, { month: monthLabel(due, s.locale) })}
+          </div>
+          <div className="banner-sub">
+            {paid
+              ? gs.duePaid
+              : overdue
+                ? t(gs.overdueDesc, { amount, month: monthLabel(due, s.locale) })
+                : recips.length
+                  ? t(gs.dueSend, { amount, name: namesOf(d, recips) })
+                  : t(gs.dueSend, { amount, name: '—' })}
+          </div>
+          {!paid && recips.map((r) => {
+            const ru = store.userById(d, r.userId);
+            return (ru?.etransferEmail || ru?.email) ? (
+              <div key={r.userId} className="send-to" style={{ marginTop: 8 }}>
+                <Landmark size={14} />
+                <span>{gs.sendTo} {ru.name}:</span>
+                <bdi>{ru.etransferEmail || ru.email}</bdi>
+              </div>
+            ) : null;
+          })}
+        </div>
+        {paid ? (
+          <Btn size="sm" variant="secondary" onClick={() => store.togglePaid(g.id, due, user.id)}>{gs.unmark}</Btn>
+        ) : (
+          <Btn variant={overdue ? 'solid-danger' : 'primary'} onClick={() => store.togglePaid(g.id, due, user.id)}>
+            <CheckCircle2 size={15} /> {gs.confirmPaid}
           </Btn>
         )}
       </div>
@@ -384,6 +450,7 @@ function ManageTab({ g, s, platformAdmin, onDeleted }) {
     maxMembers: String(g.maxMembers), startMonth: g.startMonth,
   });
   const [msg, setMsg] = useState(null);
+  const [mcMsg, setMcMsg] = useState(null);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
   const full = store.isGroupFull(g);
@@ -453,6 +520,43 @@ function ManageTab({ g, s, platformAdmin, onDeleted }) {
                 );
               })}
               {full && <ErrorBox>{gs.errFull}</ErrorBox>}
+            </div>
+          )}
+        </div>
+      </Card>
+
+      <Card>
+        <div className="stack" style={{ gap: 12 }}>
+          <SectionTitle><CalendarDays size={13} /> {gs.changeRequests}</SectionTitle>
+          {mcMsg && <ErrorBox>{mcMsg}</ErrorBox>}
+          {(g.monthChangeRequests || []).length === 0 ? (
+            <Empty icon={CalendarDays} text={gs.noRequests} />
+          ) : (
+            <div className="stack-sm">
+              {g.monthChangeRequests.map((r) => {
+                const ru = store.userById(d, r.userId);
+                const current = store.memberOf(g, r.userId)?.month;
+                return (
+                  <div key={r.userId} className="member-row" style={{ background: 'var(--bg)' }}>
+                    <Avatar name={ru?.name} size={34} />
+                    <div className="member-main">
+                      <div className="member-name">{ru?.name}</div>
+                      <div className="member-sub">
+                        {gs.currentLabel}: {current ? monthLabel(current, s.locale) : '—'}
+                        {' → '}
+                        {gs.requestedLabel}: {monthLabel(r.month, s.locale)}
+                        {r.share === 0.5 ? ` (${gs.halfBadge})` : ''}
+                      </div>
+                    </div>
+                    <Btn size="sm" onClick={() => {
+                      setMcMsg(null);
+                      try { store.approveMonthChange(g.id, r.userId); }
+                      catch { setMcMsg(gs.changeErrFull); }
+                    }}>{gs.approve}</Btn>
+                    <Btn size="sm" variant="danger" onClick={() => store.rejectMonthChange(g.id, r.userId)}>{gs.reject}</Btn>
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
@@ -540,6 +644,7 @@ export default function GroupDetail({ db, groupId, user, s, lang, onBack }) {
   const sharedWithNames = member?.month
     ? namesOf(db, store.recipientsOf(g, member.month).filter((m) => m.userId !== user.id))
     : '';
+  const myChange = store.monthChangeOf(g, user.id);
 
   return (
     <div className="page stack">
@@ -586,11 +691,34 @@ export default function GroupDetail({ db, groupId, user, s, lang, onBack }) {
         </Card>
       )}
 
-      {/* Month picker / current month banner */}
-      {member && !frozen && (!member.month || changingMonth) && (
-        <MonthPicker g={g} user={user} s={s} lang={lang} onPicked={() => setChangingMonth(false)} />
+      {/* This month's due payment */}
+      {member && <DueCard g={g} user={user} s={s} lang={lang} />}
+
+      {/* Month picker: first pick is free; changes go through admin approval */}
+      {member && !frozen && !member.month && (
+        <MonthPicker g={g} user={user} s={s} lang={lang} mode="pick" />
       )}
-      {member && member.month && (!changingMonth || frozen) && (
+      {member && !frozen && member.month && changingMonth && !myChange && (
+        <MonthPicker g={g} user={user} s={s} lang={lang} mode="request"
+          onPicked={() => setChangingMonth(false)} />
+      )}
+      {member && member.month && myChange && (
+        <div className="banner banner-gold">
+          <Hourglass size={15} style={{ color: 'var(--gold)', flexShrink: 0 }} />
+          <div className="banner-main">
+            <div className="banner-title">
+              {gs.yourMonthIs} {monthLabel(member.month, s.locale)}
+            </div>
+            <div className="banner-sub">
+              {t(gs.changePending, { month: monthLabel(myChange.month, s.locale) })}
+            </div>
+          </div>
+          <Btn size="sm" variant="secondary" onClick={() => store.cancelMonthChange(g.id, user.id)}>
+            {s.common.cancel}
+          </Btn>
+        </div>
+      )}
+      {member && member.month && !myChange && !changingMonth && (
         <div className="banner banner-gold">
           <Hourglass size={15} style={{ color: 'var(--gold)', flexShrink: 0 }} />
           <div className="banner-main">
@@ -599,7 +727,7 @@ export default function GroupDetail({ db, groupId, user, s, lang, onBack }) {
               {store.shareOf(member) === 0.5 ? ` (${gs.halfBadge}${sharedWithNames ? ` — ${gs.sharedWith} ${sharedWithNames}` : ''})` : ''}
             </span>
           </div>
-          {store.groupStatus(g) === 'forming' && !frozen && (
+          {!frozen && (
             <Btn size="sm" variant="secondary" onClick={() => setChangingMonth(true)}>{gs.changeMonth}</Btn>
           )}
         </div>

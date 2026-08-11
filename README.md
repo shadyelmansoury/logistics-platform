@@ -31,6 +31,22 @@ The app has two backends behind the same code:
 - **Month splitting** — two members (max) can share one month: each pays half
   the monthly dues and receives half that month's pot. The database enforces
   the two-half limit.
+- **Group creation is admin-only** — only platform admins can create groups
+  (enforced by database policy); members join existing groups by request.
+- **Approval-gated month changes** — a member's first month pick is direct, but
+  changing an already-confirmed month files a request that the group admin must
+  approve before it takes effect.
+- **Admin attention alerts** — group admins see a "Needs your attention" card
+  on their dashboard aggregating pending join requests, month-change requests,
+  and members who haven't paid the current month.
+- **Payment confirmation & overdue tracking** — every member gets a
+  "This month's payments" card to confirm their dues (early confirmation
+  before the month starts is allowed). From the 2nd of the month, unpaid
+  members are flagged overdue in red for them and their admin; the admin
+  console shows paid counts per group.
+- **Daily reminders (email + SMS)** — a scheduled job runs every morning and
+  notifies unpaid members from the 2nd of the month until they mark their
+  payment, plus a summary to the group admin. See "Payment reminders" below.
 - **Platform admin** — accounts with `role = 'admin'` get a moderation console:
   hide any group from discovery, disable (freeze) any group, edit any group's
   settings, and delete any group or user platform-wide. All of it enforced by
@@ -84,6 +100,41 @@ The app has two backends behind the same code:
 That's it — the same build now runs multi-user: people register on their own
 phones, ask to join, and the admin approves from theirs, with changes appearing
 live on all devices.
+
+## Payment reminders (email + SMS)
+
+The daily reminder pipeline is: `pg_cron` (schedule) → `payment-reminders`
+edge function (`supabase/functions/payment-reminders/`) → `overdue_payers()`
+SQL → Resend (email) / Twilio (SMS) → `notification_log` (audit + in-app).
+Every send is deduplicated per person/channel/day and stops automatically
+once the payment is marked in the app.
+
+Delivery is activated by setting these edge-function secrets
+(Dashboard → Edge Functions → payment-reminders → Secrets, or
+`supabase secrets set`):
+
+| Secret | Purpose |
+| --- | --- |
+| `CRON_SECRET` | Shared secret the cron job authenticates with (required) |
+| `APP_URL` | Link included in messages |
+| `RESEND_API_KEY` | [resend.com](https://resend.com) API key — activates email |
+| `EMAIL_FROM` | Verified sender, e.g. `Gam3ya <alerts@yourdomain.com>` |
+| `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` / `TWILIO_FROM` | [twilio.com](https://twilio.com) credentials + sending number — activates SMS |
+
+Without provider keys the job still runs: in-app alerts work and the log
+records email/SMS as "skipped", so nothing is silently lost. Schedule (once,
+in the SQL editor — replace the secret):
+
+```sql
+create extension if not exists pg_cron;
+create extension if not exists pg_net;
+select cron.schedule('gam3ya-payment-reminders', '0 7 * * *',
+  $$select net.http_post(
+      url := 'https://YOUR-REF.supabase.co/functions/v1/payment-reminders',
+      headers := jsonb_build_object('x-cron-secret', 'YOUR-CRON-SECRET',
+                                    'Content-Type', 'application/json'),
+      body := '{}'::jsonb)$$);
+```
 
 ## Run locally
 

@@ -119,6 +119,7 @@ export async function createGroup({ name, description, amount, currency, maxMemb
     createdAt: Date.now(),
     members: [{ userId: adminId, month: null, share: 1, joinedAt: Date.now() }],
     joinRequests: [],
+    monthChangeRequests: [],
     payments: {},
   };
   db.groups = [...db.groups, group];
@@ -173,6 +174,38 @@ export function pickMonth(groupId, userId, month, share = 1) {
       (m.userId === userId ? { ...m, month, share: grantedShare } : m));
     return g;
   });
+}
+
+export function requestMonthChange(groupId, userId, month, share = 1) {
+  patchGroup(groupId, (g) => {
+    const list = (g.monthChangeRequests || []).filter((r) => r.userId !== userId);
+    g.monthChangeRequests = [...list, { userId, month, share, requestedAt: Date.now() }];
+    return g;
+  });
+}
+
+export function cancelMonthChange(groupId, userId) {
+  patchGroup(groupId, (g) => {
+    g.monthChangeRequests = (g.monthChangeRequests || []).filter((r) => r.userId !== userId);
+    return g;
+  });
+}
+
+export function approveMonthChange(groupId, userId) {
+  const g = groupById(db, groupId);
+  const req = g?.monthChangeRequests?.find((r) => r.userId === userId);
+  if (!req) return;
+  const granted = validateMonthPick(g, userId, req.month, req.share); // throws 'monthFull'
+  patchGroup(groupId, (gr) => {
+    gr.members = gr.members.map((m) =>
+      (m.userId === userId ? { ...m, month: req.month, share: granted } : m));
+    gr.monthChangeRequests = gr.monthChangeRequests.filter((r) => r.userId !== userId);
+    return gr;
+  });
+}
+
+export function rejectMonthChange(groupId, userId) {
+  cancelMonthChange(groupId, userId);
 }
 
 export function setGroupHidden(groupId, hidden) {
