@@ -1,4 +1,4 @@
-// Gam3ya payment reminders — runs daily via pg_cron.
+// Gameya payment reminders — runs daily via pg_cron.
 // From the 2nd day of each scheduled month, every payer who hasn't confirmed
 // their payment gets a reminder (email + SMS when providers are configured),
 // and each group admin gets an overdue summary. Everything is logged to
@@ -28,11 +28,11 @@ Deno.serve(async (req) => {
   const overdue = (data ?? []) as Overdue[];
 
   const resendKey = Deno.env.get("RESEND_API_KEY") ?? "";
-  const emailFrom = Deno.env.get("EMAIL_FROM") ?? "Gam3ya <onboarding@resend.dev>";
+  const emailFrom = Deno.env.get("EMAIL_FROM") ?? "Gameya <onboarding@resend.dev>";
   const twilioSid = Deno.env.get("TWILIO_ACCOUNT_SID") ?? "";
   const twilioToken = Deno.env.get("TWILIO_AUTH_TOKEN") ?? "";
   const twilioFrom = Deno.env.get("TWILIO_FROM") ?? "";
-  const appUrl = Deno.env.get("APP_URL") ?? "https://gam3ya-app.netlify.app";
+  const appUrl = Deno.env.get("APP_URL") ?? "https://gameya.netlify.app";
 
   // Already-sent (kind|channel|group|user|month) for today — don't repeat.
   // "Today" is Toronto time, matching the app and the overdue_payers() SQL.
@@ -100,7 +100,7 @@ Deno.serve(async (req) => {
     await once(["overdue_user", "email", o.group_id, o.user_id, o.month], async () => {
       const res = await sendEmail(
         o.email,
-        `Gam3ya: payment overdue for ${o.group_name} — قسط الجمعية متأخر`,
+        `Gameya: payment overdue for ${o.group_name} — قسط الجمعية متأخر`,
         `<p>مرحباً ${o.user_name}،</p>
          <p>قسطك الشهري <b>${money}</b> لجمعية «${o.group_name}» عن شهر ${o.month} لسه متسجلش.
          من فضلك حوّل المبلغ وسجّل الدفع في التطبيق — التذكيرات بتقف أول ما تسجّل.</p>
@@ -115,7 +115,7 @@ Deno.serve(async (req) => {
     await once(["overdue_user", "sms", o.group_id, o.user_id, o.month], async () => {
       const res = await sendSms(
         o.phone,
-        `Gam3ya: your payment of ${money} for "${o.group_name}" (${o.month}) is overdue. ` +
+        `Gameya: your payment of ${money} for "${o.group_name}" (${o.month}) is overdue. ` +
         `Please send it and mark it paid in the app: ${appUrl}`,
       );
       await log({ ...base, channel: "sms", ...res });
@@ -147,7 +147,7 @@ Deno.serve(async (req) => {
       if (!adminProfile?.email) return;
       const res = await sendEmail(
         adminProfile.email,
-        `Gam3ya admin alert: ${items.length} unconfirmed payment(s) — ${groups}`,
+        `Gameya admin alert: ${items.length} unconfirmed payment(s) — ${groups}`,
         `<p>Hi ${adminProfile.name}, the following members have not confirmed their
          payment for ${month}:</p>
          <ul>${lines.map((l) => `<li>${l}</li>`).join("")}</ul>

@@ -3,12 +3,12 @@ export const S = {
   en: {
     dir: 'ltr',
     locale: 'en',
-    appName: 'Gam3ya',
+    appName: 'Gameya',
     appNameAr: 'جمعية',
     tagline: 'Organize your money circle with people you trust',
     auth: {
-      welcome: 'Welcome to Gameea',
-      intro: 'A Gameea is a rotating savings circle: every month, all members pay a fixed amount to one member, taking turns until everyone has had their month.',
+      welcome: 'Welcome to Gameya',
+      intro: 'A Gameya is a rotating savings circle: every month, all members pay a fixed amount to one member, taking turns until everyone has had their month.',
       loginTitle: 'Log in to your account',
       registerTitle: 'Create your account',
       firstName: 'First name', lastName: 'Last name',
@@ -94,8 +94,8 @@ export const S = {
       onlyAdminCreates: 'New groups are created by the platform admin.',
     },
     create: {
-      title: 'Create a new Gameea',
-      name: 'Group name', namePh: 'e.g. Family Gameea 2026',
+      title: 'Create a new Gameya',
+      name: 'Group name', namePh: 'e.g. Family Gameya 2026',
       desc: 'Description (optional)', descPh: 'What is this group about? Who is it for?',
       amount: 'Monthly amount per member',
       maxMembers: 'Max members (= number of months)',
@@ -187,7 +187,7 @@ export const S = {
     dir: 'rtl',
     locale: 'ar-EG',
     appName: 'جمعية',
-    appNameAr: 'Gam3ya',
+    appNameAr: 'Gameya',
     tagline: 'نظّم جمعيتك مع ناس تثق فيهم',
     auth: {
       welcome: 'أهلاً بيك في جمعية',

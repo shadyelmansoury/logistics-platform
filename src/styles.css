@@ -1,4 +1,4 @@
-/* ─── Gam3ya design system ────────────────────────────────────────────────────
+/* ─── Gameya design system ────────────────────────────────────────────────────
    Tokens first: the bare :root carries the complete light palette; dark
    redefines tokens only — via prefers-color-scheme for the un-stamped
    "system" state, and via [data-theme="dark"] for the explicit toggle.

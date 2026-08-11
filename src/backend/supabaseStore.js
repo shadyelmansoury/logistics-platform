@@ -45,7 +45,7 @@ async function refresh() {
   ]);
   const firstError = [profiles, groups, members, requests, payments, changeReqs].find((r) => r.error)?.error;
   if (firstError) {
-    console.error('Gameea refresh failed:', firstError.message);
+    console.error('Gameya refresh failed:', firstError.message);
     db = { ...db, loading: false };
     notify();
     return;
@@ -117,7 +117,7 @@ const scheduleRefresh = () => {
 // the true server state, so a failed optimistic action self-corrects.
 async function run(promise) {
   const { error } = await promise;
-  if (error) console.error('Gameea mutation failed:', error.message);
+  if (error) console.error('Gameya mutation failed:', error.message);
   scheduleRefresh();
   if (error) throw new Error(error.message);
 }
@@ -267,7 +267,7 @@ export async function mfaEnroll() {
       await sb.auth.mfa.unenroll({ factorId: f.id }).catch(() => {});
     }
   }
-  const { data, error } = await sb.auth.mfa.enroll({ factorType: 'totp', friendlyName: 'Gam3ya' });
+  const { data, error } = await sb.auth.mfa.enroll({ factorType: 'totp', friendlyName: 'Gameya' });
   if (error) throw new Error(error.message);
   return { factorId: data.id, qr: data.totp.qr_code, secret: data.totp.secret };
 }
@@ -295,7 +295,7 @@ export async function createGroup({ name, description, amount, currency, maxMemb
   }).select().single();
   if (error) throw new Error(error.message);
   const { error: memberError } = await sb.from('group_members').insert({ group_id: data.id, user_id: adminId });
-  if (memberError) console.error('Gam3ya: admin membership insert failed:', memberError.message);
+  if (memberError) console.error('Gameya: admin membership insert failed:', memberError.message);
   // Await the refresh so the caller can navigate straight to the new group
   await refresh();
   return { id: data.id };

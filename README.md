@@ -1,6 +1,6 @@
-# Gam3ya — جمعية
+# Gameya — جمعية
 
-A bilingual (Arabic-first, RTL + English) web app for organizing a **Gam3ya
+A bilingual (Arabic-first, RTL + English) web app for organizing a **Gameya
 (جمعية)** — the Egyptian rotating savings circle. A group of people who trust
 each other agree on a fixed monthly amount; every month all members pay that
 amount to one member, taking turns until every member has had their payout month.
@@ -54,7 +54,7 @@ The app has two backends behind the same code:
   `update public.profiles set role = 'admin' where email = 'you@example.com';`
 - **Create a group** — whoever creates a group becomes its **admin** and defines:
   - the fixed monthly amount and currency (EGP, USD, EUR, SAR, AED)
-  - the **max number of members** (which equals the number of months the Gam3ya runs)
+  - the **max number of members** (which equals the number of months the Gameya runs)
   - the first payout month
 - **Join with admin approval** — members ask to join; the group admin gives the
   final OK (approve / reject) for every request. Full groups can't be joined.
@@ -118,7 +118,7 @@ Delivery is activated by setting these edge-function secrets
 | `CRON_SECRET` | Shared secret the cron job authenticates with (required) |
 | `APP_URL` | Link included in messages |
 | `RESEND_API_KEY` | [resend.com](https://resend.com) API key — activates email |
-| `EMAIL_FROM` | Verified sender, e.g. `Gam3ya <alerts@yourdomain.com>` |
+| `EMAIL_FROM` | Verified sender, e.g. `Gameya <alerts@yourdomain.com>` |
 | `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` / `TWILIO_FROM` | [twilio.com](https://twilio.com) credentials + sending number — activates SMS |
 
 Without provider keys the job still runs: in-app alerts work and the log
@@ -170,7 +170,7 @@ npm run build   # output in dist/
 │   ├── App.jsx                   # Shell: navbar, language toggle, routing
 │   ├── store.js                  # Data layer facade — picks Supabase or demo mode
 │   ├── backend/
-│   │   ├── helpers.js            # Gam3ya rules shared by both backends
+│   │   ├── helpers.js            # Gameya rules shared by both backends
 │   │   ├── supabaseStore.js      # Real backend: Supabase auth + Postgres + realtime
 │   │   └── localStore.js         # Demo backend: localStorage
 │   ├── i18n.js                   # English + Egyptian Arabic translations

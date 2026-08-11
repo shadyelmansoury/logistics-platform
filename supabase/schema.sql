@@ -1,4 +1,4 @@
--- Gameea database schema for Supabase
+-- Gameya database schema for Supabase
 -- Run this once in the Supabase SQL Editor (Dashboard → SQL Editor → New query).
 
 create extension if not exists pgcrypto;

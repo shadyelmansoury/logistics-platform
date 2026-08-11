@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 
 // ─── Brand mark (same drawing as public/favicon.svg) ──────────────────────────
 export const Logo = ({ size = 34 }) => (
-  <svg width={size} height={size} viewBox="0 0 64 64" role="img" aria-label="Gam3ya">
+  <svg width={size} height={size} viewBox="0 0 64 64" role="img" aria-label="Gameya">
     <rect width="64" height="64" rx="15" fill="#0C7B5F" />
     <g fill="none" stroke="#FFFFFF" strokeWidth="4.6" strokeLinecap="round">
       <path d="M16.2 29.2 A16 16 0 0 1 47.8 29.2" />
