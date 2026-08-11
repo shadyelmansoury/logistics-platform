@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import {
   ArrowLeft, Crown, Users, CalendarDays, Wallet, Settings2, ChevronDown,
   CheckCircle2, Circle, Hourglass, UserPlus, Trash2, LogOut, HandCoins, Landmark,
-  EyeOff, PauseCircle, PlayCircle, Eye, ShieldAlert,
+  EyeOff, PauseCircle, PlayCircle, Eye, ShieldAlert, PartyPopper, ChevronDown as ChevronExpand,
 } from 'lucide-react';
 import {
   Card, Btn, Badge, SectionTitle, Avatar, Empty, Field, Input, ErrorBox, InfoBox, ConfirmDialog, CopyChip,
@@ -384,10 +384,45 @@ function PaymentsTab({ g, user, s, lang, admin, frozen }) {
 }
 
 // ─── Members tab ──────────────────────────────────────────────────────────────
+function MemberHistory({ g, member, s, lang }) {
+  const gs = s.group;
+  const now = store.nowMonth();
+  const elapsed = store.monthsOf(g).filter((m) => m <= now);
+  if (elapsed.length === 0) return <div className="pay-body"><span className="field-hint">—</span></div>;
+  return (
+    <div className="pay-body">
+      {elapsed.map((m) => {
+        const received = member.month === m;
+        const paid = store.hasPaid(g, m, member.userId);
+        return (
+          <div key={m} className="pay-row">
+            {received
+              ? <HandCoins size={16} style={{ color: 'var(--gold)', flexShrink: 0 }} />
+              : paid
+                ? <CheckCircle2 size={16} style={{ color: 'var(--primary)', flexShrink: 0 }} />
+                : <Circle size={16} style={{ color: 'var(--faint)', flexShrink: 0 }} />}
+            <span className="pay-row-name">{monthLabel(m, s.locale)}</span>
+            <span className={`pay-row-status${(received || paid) ? ' is-paid' : ''}`}
+              style={received ? { color: 'var(--gold)' } : undefined}>
+              {received
+                ? t(gs.historyReceived, { amount: fmtMoney(store.recipientCut(g, m, member), g.currency, lang) })
+                : paid ? gs.paid : gs.notPaid}
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function MembersTab({ g, user, s, lang, admin, onLeft }) {
   const d = store.getDB();
   const gs = s.group;
   const [confirming, setConfirming] = useState(null);
+  const [expanded, setExpanded] = useState(null);
+  const now = store.nowMonth();
+  const elapsedFor = (m) => store.monthsOf(g).filter((mm) => mm <= now && mm !== m.month);
+  const paidCountFor = (m) => elapsedFor(m).filter((mm) => store.hasPaid(g, mm, m.userId)).length;
 
   const doConfirm = () => {
     if (confirming.type === 'leave') {
@@ -407,35 +442,50 @@ function MembersTab({ g, user, s, lang, admin, onLeft }) {
         const isMe = m.userId === user?.id;
         const isGroupAdmin = m.userId === g.adminId;
         const isHalf = store.shareOf(m) === 0.5;
+        const elapsedCount = elapsedFor(m).length;
+        const isExpanded = expanded === m.userId;
         return (
-          <div key={m.userId} className="member-row">
-            <Avatar name={mu?.name} size={38} gold={isGroupAdmin} />
-            <div className="member-main">
-              <div className="member-name">
-                <span>{mu?.name}{isMe ? ` (${gs.you})` : ''}</span>
-                {isGroupAdmin && <Badge variant="gold"><Crown size={11} /> {s.dash.adminBadge}</Badge>}
-                {isHalf && <Badge variant="info">{gs.halfBadge}</Badge>}
-              </div>
-              <div className="member-sub">
-                {m.month ? `${gs.monthOf}: ${monthLabel(m.month, s.locale)}` : gs.noMonth}
-                {` · ${fmtMoney(store.duesOf(g, m), g.currency, lang)} ${s.dash.monthly}`}
-              </div>
-              {(mu?.phone || mu?.etransferEmail) && (
-                <div className="member-sub member-contact">
-                  {[mu.phone, mu.etransferEmail].filter(Boolean).join(' · ')}
+          <div key={m.userId} className="member-row" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 0, padding: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', flexWrap: 'wrap' }}>
+              <Avatar name={mu?.name} size={38} gold={isGroupAdmin} />
+              <div className="member-main">
+                <div className="member-name">
+                  <span>{mu?.name}{isMe ? ` (${gs.you})` : ''}</span>
+                  {isGroupAdmin && <Badge variant="gold"><Crown size={11} /> {s.dash.adminBadge}</Badge>}
+                  {isHalf && <Badge variant="info">{gs.halfBadge}</Badge>}
                 </div>
+                <div className="member-sub">
+                  {m.month ? `${gs.monthOf}: ${monthLabel(m.month, s.locale)}` : gs.noMonth}
+                  {` · ${fmtMoney(store.duesOf(g, m), g.currency, lang)} ${s.dash.monthly}`}
+                </div>
+                {(mu?.phone || mu?.etransferEmail) && (
+                  <div className="member-sub member-contact">
+                    {[mu.phone, mu.etransferEmail].filter(Boolean).join(' · ')}
+                  </div>
+                )}
+              </div>
+              {elapsedCount > 0 && (
+                <Btn size="sm" variant="ghost"
+                  onClick={() => setExpanded(isExpanded ? null : m.userId)}
+                  aria-expanded={isExpanded}>
+                  <Badge variant={paidCountFor(m) >= elapsedCount ? 'primary' : 'muted'}>
+                    {t(gs.historyChip, { p: paidCountFor(m), t: elapsedCount })}
+                  </Badge>
+                  <ChevronExpand size={14} style={{ transform: isExpanded ? 'rotate(180deg)' : 'none' }} />
+                </Btn>
+              )}
+              {admin && !isGroupAdmin && (
+                <Btn size="sm" variant="danger" onClick={() => setConfirming({ type: 'remove', userId: m.userId })}>
+                  <Trash2 size={13} /> {gs.remove}
+                </Btn>
+              )}
+              {isMe && !isGroupAdmin && (
+                <Btn size="sm" variant="danger" onClick={() => setConfirming({ type: 'leave' })}>
+                  <LogOut size={13} /> {gs.leave}
+                </Btn>
               )}
             </div>
-            {admin && !isGroupAdmin && (
-              <Btn size="sm" variant="danger" onClick={() => setConfirming({ type: 'remove', userId: m.userId })}>
-                <Trash2 size={13} /> {gs.remove}
-              </Btn>
-            )}
-            {isMe && !isGroupAdmin && (
-              <Btn size="sm" variant="danger" onClick={() => setConfirming({ type: 'leave' })}>
-                <LogOut size={13} /> {gs.leave}
-              </Btn>
-            )}
+            {isExpanded && <MemberHistory g={g} member={m} s={s} lang={lang} />}
           </div>
         );
       })}
@@ -668,6 +718,26 @@ export default function GroupDetail({ db, groupId, user, s, lang, onBack }) {
       </div>
 
       <Header g={g} s={s} lang={lang} admin={admin} platformAdmin={platformAdmin} me={member} />
+
+      {/* Completion celebration */}
+      {store.groupStatus(g) === 'completed' && (
+        <Card className="card-gold">
+          <div className="banner" style={{ padding: 0 }}>
+            <PartyPopper size={24} style={{ color: 'var(--gold)', flexShrink: 0 }} />
+            <div className="banner-main">
+              <div className="banner-title" style={{ fontSize: 16 }}>{gs.completedTitle}</div>
+              <div className="banner-sub">
+                {t(gs.completedDesc, {
+                  total: fmtMoney(
+                    store.monthsOf(g).reduce((sum, m) => sum + store.potOf(g, m), 0),
+                    g.currency, lang,
+                  ),
+                })}
+              </div>
+            </div>
+          </div>
+        </Card>
+      )}
 
       {/* Disabled notice */}
       {frozen && (

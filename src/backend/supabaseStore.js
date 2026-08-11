@@ -35,13 +35,16 @@ async function refresh() {
     notify();
     return;
   }
-  const [profiles, groups, members, requests, payments, changeReqs] = await Promise.all([
+  const [profiles, groups, members, requests, payments, changeReqs, notifs] = await Promise.all([
     sb.from('profiles').select('*'),
     sb.from('groups').select('*'),
     sb.from('group_members').select('*'),
     sb.from('join_requests').select('*'),
     sb.from('payments').select('*'),
     sb.from('month_change_requests').select('*'),
+    sb.from('notification_log').select('*')
+      .eq('user_id', db.session).eq('channel', 'inapp')
+      .order('created_at', { ascending: false }).limit(40),
   ]);
   const firstError = [profiles, groups, members, requests, payments, changeReqs].find((r) => r.error)?.error;
   if (firstError) {
@@ -103,7 +106,12 @@ async function refresh() {
     payments: paymentsByGroup[g.id] || {},
   }));
 
-  db = { ...db, users, groups: shaped, loading: false };
+  const notifications = (notifs.data || []).map((n) => ({
+    id: n.id, kind: n.kind, groupId: n.group_id, month: n.month,
+    detail: n.detail, createdAt: ts(n.created_at),
+  }));
+
+  db = { ...db, users, groups: shaped, notifications, loading: false };
   notify();
 }
 
@@ -432,6 +440,19 @@ export function deleteGroup(groupId) {
 export function togglePaid(groupId, month, payerId) {
   const g = groupById(db, groupId);
   const alreadyPaid = Boolean(g?.payments[month]?.[payerId]);
+  // Optimistic: flip the cache instantly; the post-mutation refresh corrects
+  // the cache if the server disagrees.
+  if (g) {
+    const monthPay = { ...(g.payments[month] || {}) };
+    if (alreadyPaid) delete monthPay[payerId];
+    else monthPay[payerId] = Date.now();
+    db = {
+      ...db,
+      groups: db.groups.map((x) =>
+        (x.id === groupId ? { ...x, payments: { ...x.payments, [month]: monthPay } } : x)),
+    };
+    notify();
+  }
   const q = alreadyPaid
     ? sb.from('payments').delete().eq('group_id', groupId).eq('month', month).eq('payer_id', payerId)
     : sb.from('payments').insert({ group_id: groupId, month, payer_id: payerId });

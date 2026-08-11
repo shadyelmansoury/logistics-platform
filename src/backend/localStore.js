@@ -6,7 +6,7 @@ import { memberOf, hasRequested, groupById, validateGroupPatch, validateMonthPic
 
 const DB_KEY = 'gameea_db_v1';
 
-const seed = () => ({ users: [], groups: [], session: null });
+const seed = () => ({ users: [], groups: [], session: null, notifications: [] });
 
 const loadDB = () => {
   try {

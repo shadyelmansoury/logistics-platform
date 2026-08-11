@@ -1,5 +1,5 @@
 import { useEffect, useState, useSyncExternalStore } from 'react';
-import { Languages, LogOut, Sun, Moon, ShieldAlert, Home, Plus, UserRound } from 'lucide-react';
+import { Languages, LogOut, Sun, Moon, ShieldAlert, Home, Plus, UserRound, Bell } from 'lucide-react';
 import { S } from './i18n.js';
 import * as store from './store.js';
 import Auth from './components/Auth.jsx';
@@ -10,10 +10,12 @@ import CreateGroup from './components/CreateGroup.jsx';
 import GroupDetail from './components/GroupDetail.jsx';
 import Account from './components/Account.jsx';
 import AdminConsole from './components/AdminConsole.jsx';
+import Notifications from './components/Notifications.jsx';
 import { Avatar, Logo } from './components/ui.jsx';
 
 const LANG_KEY = 'gam3ya_lang';
 const THEME_KEY = 'gam3ya_theme';
+const NOTIF_SEEN_KEY = 'gameya_notif_seen';
 
 const initialLang = () => {
   try { return localStorage.getItem(LANG_KEY) === 'en' ? 'en' : 'ar'; } catch { return 'ar'; }
@@ -35,6 +37,16 @@ export default function App() {
   const s = S[lang];
   const user = store.currentUser(db);
   const platformAdmin = user ? store.isPlatformAdmin(db, user.id) : false;
+  const [notifSeen, setNotifSeen] = useState(() => {
+    try { return Number(localStorage.getItem(NOTIF_SEEN_KEY)) || 0; } catch { return 0; }
+  });
+  const hasUnread = (db.notifications || []).some((n) => (n.createdAt || 0) > notifSeen);
+  const openNotifications = () => {
+    const now = Date.now();
+    setNotifSeen(now);
+    try { localStorage.setItem(NOTIF_SEEN_KEY, String(now)); } catch { /* storage blocked */ }
+    setView({ name: 'notifications' });
+  };
 
   useEffect(() => {
     const root = document.documentElement;
@@ -76,6 +88,18 @@ export default function App() {
           >
             {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
           </button>
+          {user && (
+            <button
+              className="icon-btn"
+              style={{ position: 'relative' }}
+              onClick={openNotifications}
+              aria-label={s.nav.notifications}
+              title={s.nav.notifications}
+            >
+              <Bell size={16} />
+              {hasUnread && <span className="notif-dot" aria-hidden="true" />}
+            </button>
+          )}
           {user && platformAdmin && (
             <button
               className="icon-btn"
@@ -117,6 +141,8 @@ export default function App() {
         <Auth s={s} />
       ) : view.name === 'account' ? (
         <Account user={user} s={s} onBack={goHome} />
+      ) : view.name === 'notifications' ? (
+        <Notifications db={db} s={s} onOpenGroup={openGroup} onBack={goHome} />
       ) : view.name === 'admin' && platformAdmin ? (
         <AdminConsole db={db} user={user} s={s} lang={lang} onOpen={openGroup} onBack={goHome} />
       ) : view.name === 'create' && platformAdmin ? (

@@ -841,6 +841,46 @@ textarea.input { min-height: 0; resize: vertical; line-height: 1.5; }
 .copy-chip.is-copied { background: var(--primary-soft); border-color: var(--primary); }
 .copy-chip-label { font-size: 11.5px; font-weight: 700; white-space: nowrap; }
 
+/* ─── Notifications ─────────────────────────────────────────────────────────── */
+
+.notif-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  width: 100%;
+  padding: 13px 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+  cursor: pointer;
+  text-align: start;
+  font-family: var(--font);
+  transition: border-color 0.15s;
+}
+.notif-row:hover:not(:disabled) { border-color: var(--primary-border); }
+.notif-row:disabled { cursor: default; }
+.notif-icon {
+  width: 34px; height: 34px; border-radius: 10px; flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.notif-icon.is-danger { background: var(--danger-soft); color: var(--danger); }
+.notif-icon.is-info { background: var(--info-soft); color: var(--info); }
+.notif-icon.is-primary { background: var(--primary-soft); color: var(--primary); }
+.notif-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.notif-text { font-size: 13.5px; font-weight: 600; color: var(--ink); line-height: 1.5; }
+.notif-when { font-size: 11.5px; color: var(--faint); }
+
+.notif-dot {
+  position: absolute;
+  top: 7px;
+  inset-inline-end: 7px;
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--danger);
+  border: 1.5px solid var(--surface);
+}
+
 /* ─── Card allocation progress ──────────────────────────────────────────────── */
 
 .card-progress {
