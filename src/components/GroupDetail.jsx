@@ -3,6 +3,7 @@ import {
   ArrowLeft, Crown, Users, CalendarDays, Wallet, Settings2, ChevronDown,
   CheckCircle2, Circle, Hourglass, UserPlus, Trash2, LogOut, HandCoins, Landmark,
   EyeOff, PauseCircle, PlayCircle, Eye, ShieldAlert, PartyPopper, ChevronDown as ChevronExpand,
+  Pencil,
 } from 'lucide-react';
 import {
   Card, Btn, Badge, SectionTitle, Avatar, Empty, Field, Input, ErrorBox, InfoBox, ConfirmDialog, CopyChip,
@@ -16,7 +17,7 @@ const namesOf = (d, members) =>
   members.map((m) => store.userById(d, m.userId)?.name || '?').join(' + ');
 
 // ─── Header ───────────────────────────────────────────────────────────────────
-function Header({ g, s, lang, admin, platformAdmin, me }) {
+function Header({ g, s, lang, admin, platformAdmin, me, onEdit }) {
   const d = store.getDB();
   const status = store.groupStatus(g);
   const gs = s.group;
@@ -43,6 +44,12 @@ function Header({ g, s, lang, admin, platformAdmin, me }) {
             {admin && <Badge variant="gold"><Crown size={11} /> {s.dash.adminBadge}</Badge>}
             {g.hidden && (admin || platformAdmin) && <Badge variant="muted"><EyeOff size={11} /> {gs.hiddenBadge}</Badge>}
             {g.disabled && <Badge variant="danger"><PauseCircle size={11} /> {gs.disabledBadge}</Badge>}
+            {onEdit && (
+              <button type="button" className="edit-pencil" onClick={onEdit}
+                aria-label={gs.editGroup} title={gs.editGroup}>
+                <Pencil size={14} />
+              </button>
+            )}
           </div>
           {g.description && <p className="group-desc">{g.description}</p>}
           <div className="group-sub">
@@ -717,7 +724,8 @@ export default function GroupDetail({ db, groupId, user, s, lang, onBack }) {
         </Btn>
       </div>
 
-      <Header g={g} s={s} lang={lang} admin={admin} platformAdmin={platformAdmin} me={member} />
+      <Header g={g} s={s} lang={lang} admin={admin} platformAdmin={platformAdmin} me={member}
+        onEdit={(admin || platformAdmin) ? () => setTab('manage') : null} />
 
       {/* Completion celebration */}
       {store.groupStatus(g) === 'completed' && (
