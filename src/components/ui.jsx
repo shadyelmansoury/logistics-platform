@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Copy, Check } from 'lucide-react';
 
 // ─── Brand mark (same drawing as public/favicon.svg) ──────────────────────────
 export const Logo = ({ size = 34 }) => (
@@ -76,6 +77,37 @@ export const Empty = ({ icon: Icon, text }) => (
     <div className="empty-text">{text}</div>
   </div>
 );
+
+// ─── Copy-to-clipboard chip ───────────────────────────────────────────────────
+// Shows the value in a monospace chip with a one-tap copy button — used for
+// e-transfer emails so payers never retype them by hand.
+
+export function CopyChip({ text, copyLabel, copiedLabel }) {
+  const [copied, setCopied] = useState(false);
+  const doCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      // Older browsers: fall back to a hidden textarea
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      ta.remove();
+    }
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+  return (
+    <button type="button" className={`copy-chip${copied ? ' is-copied' : ''}`} onClick={doCopy}
+      title={copied ? copiedLabel : copyLabel} aria-label={`${copyLabel}: ${text}`}>
+      <bdi>{text}</bdi>
+      {copied ? <Check size={13} /> : <Copy size={13} />}
+      <span className="copy-chip-label">{copied ? copiedLabel : copyLabel}</span>
+    </button>
+  );
+}
 
 // ─── Phone input with country dial-code selector ──────────────────────────────
 // Stores the full number in international format (+14165551234), which the

@@ -4,6 +4,7 @@ import { S } from './i18n.js';
 import * as store from './store.js';
 import Auth from './components/Auth.jsx';
 import MfaGate from './components/MfaGate.jsx';
+import SetPassword from './components/SetPassword.jsx';
 import Dashboard from './components/Dashboard.jsx';
 import CreateGroup from './components/CreateGroup.jsx';
 import GroupDetail from './components/GroupDetail.jsx';
@@ -110,6 +111,8 @@ export default function App() {
         <div className="loading-screen">{s.common.loading}</div>
       ) : db.mfaPending ? (
         <MfaGate s={s} />
+      ) : db.passwordRecovery ? (
+        <SetPassword s={s} />
       ) : !user ? (
         <Auth s={s} />
       ) : view.name === 'account' ? (

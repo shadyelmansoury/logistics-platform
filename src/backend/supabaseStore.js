@@ -13,7 +13,7 @@ export const hasSupabase = Boolean(url && anonKey);
 
 const sb = hasSupabase ? createClient(url, anonKey) : null;
 
-let db = { users: [], groups: [], session: null, loading: true, mfaPending: false };
+let db = { users: [], groups: [], session: null, loading: true, mfaPending: false, passwordRecovery: false };
 let mfaPendingFactorId = null;
 let listeners = [];
 
@@ -148,8 +148,14 @@ export async function init() {
   await refresh();
 
   sb.auth.onAuthStateChange((event) => {
+    if (event === 'PASSWORD_RECOVERY') {
+      // Arrived via a reset-link: hold the app until a new password is set.
+      db = { ...db, passwordRecovery: true };
+      notify();
+      return;
+    }
     if (event === 'SIGNED_OUT') {
-      db = { ...db, session: null, mfaPending: false };
+      db = { ...db, session: null, mfaPending: false, passwordRecovery: false };
       scheduleRefresh();
       return;
     }
@@ -225,8 +231,23 @@ export async function completeMfaLogin(code) {
 export function logout() {
   sb.auth.signOut().catch((e) => console.error(e));
   mfaPendingFactorId = null;
-  db = { ...db, users: [], groups: [], session: null, loading: false, mfaPending: false };
+  db = { ...db, users: [], groups: [], session: null, loading: false, mfaPending: false, passwordRecovery: false };
   notify();
+}
+
+export async function requestPasswordReset(email) {
+  const { error } = await sb.auth.resetPasswordForEmail(email.trim().toLowerCase(), {
+    redirectTo: window.location.origin,
+  });
+  if (error) throw new Error(error.message);
+}
+
+export async function updatePassword(newPassword) {
+  const { error } = await sb.auth.updateUser({ password: newPassword });
+  if (error) throw new Error(error.message);
+  db = { ...db, passwordRecovery: false };
+  await evaluateSession();
+  await refresh();
 }
 
 // ─── Profile ──────────────────────────────────────────────────────────────────

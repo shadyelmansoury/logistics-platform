@@ -5,7 +5,7 @@ import {
   EyeOff, PauseCircle, PlayCircle, Eye, ShieldAlert,
 } from 'lucide-react';
 import {
-  Card, Btn, Badge, SectionTitle, Avatar, Empty, Field, Input, ErrorBox, InfoBox, ConfirmDialog,
+  Card, Btn, Badge, SectionTitle, Avatar, Empty, Field, Input, ErrorBox, InfoBox, ConfirmDialog, CopyChip,
 } from './ui.jsx';
 import { monthLabel, fmtMoney, t } from '../i18n.js';
 import * as store from '../store.js';
@@ -193,13 +193,14 @@ function DueCard({ g, user, s, lang }) {
                   ? t(gs.dueSend, { amount, name: namesOf(d, recips) })
                   : t(gs.dueSend, { amount, name: '—' })}
           </div>
-          {!paid && recips.map((r) => {
+          {recips.map((r) => {
             const ru = store.userById(d, r.userId);
             return (ru?.etransferEmail || ru?.email) ? (
               <div key={r.userId} className="send-to" style={{ marginTop: 8 }}>
                 <Landmark size={14} />
                 <span>{gs.sendTo} {ru.name}:</span>
-                <bdi>{ru.etransferEmail || ru.email}</bdi>
+                <CopyChip text={ru.etransferEmail || ru.email}
+                  copyLabel={s.common.copy} copiedLabel={s.common.copied} />
               </div>
             ) : null;
           })}
@@ -261,6 +262,17 @@ function ScheduleTab({ g, user, s, lang }) {
                   {paidCount}/{payers.length}
                 </div>
                 <div className="schedule-count-label">{gs.paid}</div>
+              </div>
+            )}
+            {isCurrent && recips.length > 0 && (
+              <div className="schedule-sendto">
+                {recips.map((r) => {
+                  const ru = store.userById(d, r.userId);
+                  return (ru?.etransferEmail || ru?.email) ? (
+                    <CopyChip key={r.userId} text={ru.etransferEmail || ru.email}
+                      copyLabel={s.common.copy} copiedLabel={s.common.copied} />
+                  ) : null;
+                })}
               </div>
             )}
           </div>
@@ -327,7 +339,8 @@ function PaymentsTab({ g, user, s, lang, admin, frozen }) {
                         {gs.sendTo} {ru?.name}
                         {recips.length === 2 ? ` (${fmtMoney(store.recipientCut(g, m, r), g.currency, lang)})` : ''}:
                       </span>
-                      <bdi>{ru?.etransferEmail || ru?.email}</bdi>
+                      <CopyChip text={ru?.etransferEmail || ru?.email || ''}
+                        copyLabel={s.common.copy} copiedLabel={s.common.copied} />
                     </div>
                   );
                 })}

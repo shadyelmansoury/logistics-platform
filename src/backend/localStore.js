@@ -101,6 +101,8 @@ export async function mfaEnroll() { throw new Error('unavailable'); }
 export async function mfaVerifyEnroll() { throw new Error('unavailable'); }
 export async function mfaUnenroll() { throw new Error('unavailable'); }
 export async function completeMfaLogin() { throw new Error('unavailable'); }
+export async function requestPasswordReset() { throw new Error('unavailable'); }
+export async function updatePassword() { throw new Error('unavailable'); }
 
 // ─── Group mutations ──────────────────────────────────────────────────────────
 

@@ -37,6 +37,9 @@ export const mfaEnroll = () => impl.mfaEnroll();
 export const mfaVerifyEnroll = (factorId, code) => impl.mfaVerifyEnroll(factorId, code);
 export const mfaUnenroll = (factorId) => impl.mfaUnenroll(factorId);
 export const completeMfaLogin = (code) => impl.completeMfaLogin(code);
+export const resetAvailable = supa.hasSupabase;
+export const requestPasswordReset = (email) => impl.requestPasswordReset(email);
+export const updatePassword = (newPassword) => impl.updatePassword(newPassword);
 
 export const createGroup = (data) => impl.createGroup(data);
 export const requestJoin = (groupId, userId) => impl.requestJoin(groupId, userId);

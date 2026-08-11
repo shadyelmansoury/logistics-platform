@@ -21,6 +21,20 @@ export default function Auth({ s }) {
   const submit = async (e) => {
     e.preventDefault();
     setError('');
+    if (mode === 'reset') {
+      if (!isEmail(form.email)) return setError(a.errEmail);
+      setBusy(true);
+      try {
+        await store.requestPasswordReset(form.email);
+        setInfo(a.resetSent);
+        setMode('login');
+      } catch {
+        setError(a.errGeneric);
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
     if (mode === 'register') {
       if (!form.firstName.trim() || !form.lastName.trim() || !form.email.trim() || !form.password) {
         return setError(a.errRequired);
@@ -86,9 +100,9 @@ export default function Auth({ s }) {
           <div className="stack" style={{ gap: 14 }}>
             <div>
               <div className="page-title" style={{ fontSize: 19 }}>
-                {mode === 'login' ? a.loginTitle : a.registerTitle}
+                {mode === 'login' ? a.loginTitle : mode === 'reset' ? a.resetTitle : a.registerTitle}
               </div>
-              <div className="field-hint">{a.welcome}</div>
+              <div className="field-hint">{mode === 'reset' ? a.resetDesc : a.welcome}</div>
             </div>
             <ErrorBox>{error}</ErrorBox>
             <InfoBox>{info}</InfoBox>
@@ -128,25 +142,33 @@ export default function Auth({ s }) {
                   )}
                 </Field>
               )}
-              <Field label={a.password}>
-                <Input type="password" value={form.password} onChange={set('password')}
-                  autoComplete={mode === 'login' ? 'current-password' : 'new-password'} dir="ltr" />
-              </Field>
+              {mode !== 'reset' && (
+                <Field label={a.password}>
+                  <Input type="password" value={form.password} onChange={set('password')}
+                    autoComplete={mode === 'login' ? 'current-password' : 'new-password'} dir="ltr" />
+                </Field>
+              )}
               {mode === 'register' && (
                 <Field label={a.confirm}>
                   <Input type="password" value={form.confirm} onChange={set('confirm')} autoComplete="new-password" dir="ltr" />
                 </Field>
               )}
               <Btn type="submit" size="lg" block disabled={busy}>
-                {mode === 'login' ? a.login : a.register}
+                {mode === 'login' ? a.login : mode === 'reset' ? a.resetSend : a.register}
               </Btn>
             </form>
+            {mode === 'login' && store.resetAvailable && (
+              <button type="button" className="link-btn" style={{ marginTop: -6 }}
+                onClick={() => { setMode('reset'); setError(''); setInfo(''); }}>
+                {a.forgot}
+              </button>
+            )}
             <button
               type="button"
               className="link-btn"
-              onClick={() => { setMode(mode === 'login' ? 'register' : 'login'); setError(''); }}
+              onClick={() => { setMode(mode === 'login' ? 'register' : 'login'); setError(''); setInfo(''); }}
             >
-              {mode === 'login' ? a.toRegister : a.toLogin}
+              {mode === 'login' ? a.toRegister : mode === 'reset' ? a.backToLogin : a.toLogin}
             </button>
           </div>
         </Card>
