@@ -42,7 +42,7 @@ export default function Auth({ s }) {
       if (!form.phone.trim()) return setError(a.errPhoneRequired);
       if (!isEmail(form.email)) return setError(a.errEmail);
       if (!form.sameEtransfer && !isEmail(form.etransferEmail)) return setError(a.errEmail);
-      if (form.password.length < 6) return setError(a.errPassShort);
+      if (form.password.length < 8) return setError(a.errPassShort);
       if (form.password !== form.confirm) return setError(a.errPassMatch);
     } else if (!form.email.trim() || !form.password) {
       return setError(a.errRequired);
