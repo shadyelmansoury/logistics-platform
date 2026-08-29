@@ -4,7 +4,7 @@ import { Card, Btn, Field, Input, ErrorBox } from './ui.jsx';
 import { t, fmtMoney } from '../i18n.js';
 import * as store from '../store.js';
 
-const CURRENCIES = ['EGP', 'USD', 'EUR', 'SAR', 'AED'];
+const CURRENCIES = ['CAD', 'USD', 'EGP', 'EUR', 'SAR', 'AED'];
 
 export default function CreateGroup({ user, s, lang, onDone, onBack }) {
   const now = new Date();
@@ -12,7 +12,7 @@ export default function CreateGroup({ user, s, lang, onDone, onBack }) {
   const defaultStart = `${nextMonth.getFullYear()}-${String(nextMonth.getMonth() + 1).padStart(2, '0')}`;
 
   const [form, setForm] = useState({
-    name: '', description: '', amount: '', currency: 'EGP', maxMembers: '10', startMonth: defaultStart,
+    name: '', description: '', amount: '', currency: 'CAD', maxMembers: '10', startMonth: defaultStart,
   });
   const [error, setError] = useState('');
   const c = s.create;
