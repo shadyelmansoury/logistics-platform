@@ -36,10 +36,40 @@ export const recipientsOf = (group, month) => group.members.filter((m) => m.mont
 export const monthShareTotal = (group, month) =>
   recipientsOf(group, month).reduce((s, m) => s + shareOf(m), 0);
 
-// What this member pays each month (their own turn month excluded)
+// What a single slot pays each round (that slot's own turn month excluded)
 export const duesOf = (group, member) => group.amount * shareOf(member);
 
-// Total collected for a month = everyone else's dues
+// ─── Multi-month membership ──────────────────────────────────────────────────
+// A member may hold several slots (months) in one group. Each group_members row
+// is one slot; the money math sums over slots. A member contributes once per
+// slot they hold each round (except the slot receiving that month) and receives
+// the pot in each of their assigned months.
+
+export const memberSlots = (group, userId) => group.members.filter((m) => m.userId === userId);
+export const isMemberOf = (group, userId) => group.members.some((m) => m.userId === userId);
+
+// A member's combined dues for a given month = sum over their slots not
+// receiving that month. (Holding two months → pays twice, minus any slot whose
+// payout is this month.)
+export const memberDuesForMonth = (group, userId, month) =>
+  memberSlots(group, userId)
+    .filter((m) => m.month !== month)
+    .reduce((s, m) => s + group.amount * shareOf(m), 0);
+
+// A member's total per-round commitment (all their slots), shown as "your dues".
+export const memberTotalDues = (group, userId) =>
+  memberSlots(group, userId).reduce((s, m) => s + group.amount * shareOf(m), 0);
+
+// Distinct members who owe into a given month (hold ≥1 slot not receiving it).
+export const payersOf = (group, month) => {
+  const ids = [];
+  for (const m of group.members) {
+    if (m.month !== month && !ids.includes(m.userId)) ids.push(m.userId);
+  }
+  return ids;
+};
+
+// Total collected for a month = everyone else's dues (sums over all paying slots)
 export const potOf = (group, month) =>
   group.members
     .filter((m) => m.month !== month)
@@ -77,8 +107,9 @@ export const currentDueMonth = (group) => {
 
 export const hasPaid = (group, month, userId) => Boolean(group.payments[month]?.[userId]);
 
+// Distinct members who owe this month and haven't paid yet (returns userIds).
 export const unpaidPayers = (group, month) =>
-  group.members.filter((m) => m.month !== month && !hasPaid(group, month, m.userId));
+  payersOf(group, month).filter((userId) => !hasPaid(group, month, userId));
 
 // Payments are due on the 1st; from the 2nd onward (Toronto time) an unpaid
 // member is overdue.
@@ -89,8 +120,10 @@ export const memberOverdueMonth = (group, userId) => {
   if (group.disabled) return null;
   const due = currentDueMonth(group);
   if (!due || !isPastGraceDay()) return null;
-  const m = memberOf(group, userId);
-  if (!m || m.month === due) return null;
+  if (!isMemberOf(group, userId)) return null;
+  // Owes this month if they hold any slot that isn't receiving it
+  const owes = memberSlots(group, userId).some((m) => m.month !== due);
+  if (!owes) return null;
   return hasPaid(group, due, userId) ? null : due;
 };
 
@@ -98,6 +131,9 @@ export const memberOverdueMonth = (group, userId) => {
 
 export const monthChangeOf = (group, userId) =>
   (group.monthChangeRequests || []).find((r) => r.userId === userId) || null;
+
+export const monthChangeOfSlot = (group, slotId) =>
+  (group.monthChangeRequests || []).find((r) => r.slotId === slotId) || null;
 
 // ─── Group-admin attention queue ──────────────────────────────────────────────
 
@@ -137,10 +173,15 @@ export function validateGroupPatch(group, patch) {
   return next;
 }
 
-// Returns the share the user may take for a month, or throws.
-export function validateMonthPick(group, userId, month, requestedShare) {
+// Returns the share the user may take for a month, or throws. `excludeSlotId`
+// is the slot being edited (so a member changing a slot doesn't clash with
+// itself); for a brand-new slot pass null.
+export function validateMonthPick(group, userId, month, requestedShare, excludeSlotId = null) {
   if (!monthsOf(group).includes(month)) throw new Error('badMonth');
-  const occupants = recipientsOf(group, month).filter((m) => m.userId !== userId);
+  const here = recipientsOf(group, month).filter((m) => m.id !== excludeSlotId);
+  // A member can't hold the same month twice
+  if (here.some((m) => m.userId === userId)) throw new Error('monthFull');
+  const occupants = here.filter((m) => m.userId !== userId);
   if (occupants.length >= 2) throw new Error('monthFull');
   if (occupants.length === 1) {
     if (shareOf(occupants[0]) >= 1) throw new Error('monthFull');

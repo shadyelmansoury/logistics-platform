@@ -13,10 +13,11 @@ export {
   monthsOf, nowMonth, groupStatus,
   currentUser, userById, groupById,
   memberOf, isAdmin, hasRequested,
+  memberSlots, isMemberOf, memberDuesForMonth, memberTotalDues, payersOf,
   shareOf, recipientsOf, monthShareTotal, duesOf, potOf, recipientCut,
   openMonths, isGroupFull, isPlatformAdmin,
   currentDueMonth, hasPaid, unpaidPayers, isPastGraceDay, memberOverdueMonth,
-  monthChangeOf, adminAttention,
+  monthChangeOf, monthChangeOfSlot, adminAttention,
 } from './backend/helpers.js';
 
 const impl = supa.hasSupabase ? supa : local;
@@ -46,15 +47,18 @@ export const requestJoin = (groupId, userId) => impl.requestJoin(groupId, userId
 export const cancelRequest = (groupId, userId) => impl.cancelRequest(groupId, userId);
 export const approveRequest = (groupId, userId) => impl.approveRequest(groupId, userId);
 export const rejectRequest = (groupId, userId) => impl.rejectRequest(groupId, userId);
+// Pick fills the member's empty slot, or adds a new slot (extra month).
 export const pickMonth = (groupId, userId, month, share) => impl.pickMonth(groupId, userId, month, share);
 export const setGroupHidden = (groupId, hidden) => impl.setGroupHidden(groupId, hidden);
 export const setGroupDisabled = (groupId, disabled) => impl.setGroupDisabled(groupId, disabled);
 export const adminDeleteUser = (userId) => impl.adminDeleteUser(userId);
 export const approveUser = (userId) => impl.approveUser(userId);
-export const requestMonthChange = (groupId, userId, month, share) => impl.requestMonthChange(groupId, userId, month, share);
-export const cancelMonthChange = (groupId, userId) => impl.cancelMonthChange(groupId, userId);
-export const approveMonthChange = (groupId, userId) => impl.approveMonthChange(groupId, userId);
-export const rejectMonthChange = (groupId, userId) => impl.rejectMonthChange(groupId, userId);
+// Month changes target a specific slot.
+export const requestMonthChange = (groupId, userId, slotId, month, share) => impl.requestMonthChange(groupId, userId, slotId, month, share);
+export const cancelMonthChange = (groupId, slotId) => impl.cancelMonthChange(groupId, slotId);
+export const approveMonthChange = (groupId, slotId) => impl.approveMonthChange(groupId, slotId);
+export const rejectMonthChange = (groupId, slotId) => impl.rejectMonthChange(groupId, slotId);
+export const removeSlot = (groupId, slotId) => impl.removeSlot(groupId, slotId);
 export const removeMember = (groupId, userId) => impl.removeMember(groupId, userId);
 export const updateGroup = (groupId, patch) => impl.updateGroup(groupId, patch);
 export const deleteGroup = (groupId) => impl.deleteGroup(groupId);

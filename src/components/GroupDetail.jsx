@@ -27,7 +27,7 @@ function Header({ g, s, lang, admin, platformAdmin, me, onEdit }) {
   const stats = [
     { label: gs.monthlyAmount, val: fmtMoney(g.amount, g.currency, lang) },
     me
-      ? { label: gs.yourDues, val: fmtMoney(store.duesOf(g, me), g.currency, lang) }
+      ? { label: gs.yourDues, val: fmtMoney(store.memberTotalDues(g, me.userId), g.currency, lang) }
       : { label: gs.perTurn, val: fmtMoney(idealPot, g.currency, lang) },
     { label: gs.duration, val: `${g.maxMembers} ${gs.months}` },
     { label: gs.startsLabel, val: monthLabel(g.startMonth, s.locale) },
@@ -71,12 +71,11 @@ function Header({ g, s, lang, admin, platformAdmin, me, onEdit }) {
 }
 
 // ─── Month picker (supports full and half shares) ─────────────────────────────
-function MonthPicker({ g, user, s, lang, mode = 'pick', onPicked }) {
+function MonthPicker({ g, user, s, lang, mode = 'pick', slotId = null, onPicked, onCancel }) {
   const [selected, setSelected] = useState(null);
   const [shareChoice, setShareChoice] = useState('full');
   const gs = s.group;
   const months = store.monthsOf(g);
-  const me = store.memberOf(g, user.id);
   const d = store.getDB();
   const isRequest = mode === 'request';
 
@@ -89,30 +88,37 @@ function MonthPicker({ g, user, s, lang, mode = 'pick', onPicked }) {
   return (
     <Card className="card-primary">
       <div className="stack" style={{ gap: 12 }}>
-        <div>
-          <div className="group-card-title" style={{ fontSize: 17 }}>
-            <CalendarDays size={17} style={{ color: 'var(--primary)' }} />
-            <span>{isRequest ? gs.requestChangeTitle : gs.pickTitle}</span>
+        <div className="head-row">
+          <div>
+            <div className="group-card-title" style={{ fontSize: 17 }}>
+              <CalendarDays size={17} style={{ color: 'var(--primary)' }} />
+              <span>{isRequest ? gs.requestChangeTitle : gs.pickTitle}</span>
+            </div>
+            <p className="field-hint" style={{ marginTop: 4 }}>{isRequest ? gs.requestChangeHint : gs.pickHint}</p>
+            <p className="field-hint" style={{ marginTop: 4 }}>{gs.shareHint}</p>
           </div>
-          <p className="field-hint" style={{ marginTop: 4 }}>{isRequest ? gs.requestChangeHint : gs.pickHint}</p>
-          <p className="field-hint" style={{ marginTop: 4 }}>{gs.shareHint}</p>
+          {onCancel && (
+            <Btn size="sm" variant="ghost" onClick={onCancel}>{s.common.cancel}</Btn>
+          )}
         </div>
 
         <div className="month-grid">
           {months.map((m) => {
-            const occupants = store.recipientsOf(g, m).filter((x) => x.userId !== user.id);
-            const mine = store.recipientsOf(g, m).some((x) => x.userId === user.id);
+            const here = store.recipientsOf(g, m);
+            const mine = here.some((x) => x.userId === user.id && x.id !== slotId);
+            const occupants = here.filter((x) => x.userId !== user.id && x.id !== slotId);
             const total = occupants.reduce((sum, x) => sum + store.shareOf(x), 0);
             const full = occupants.length >= 2 || total >= 1;
             const halfOpen = occupants.length === 1 && total === 0.5;
             const isSelected = selected === m;
+            const disabled = mine || full;
             const cls = ['month-cell', isSelected && 'is-selected', mine && !isSelected && 'is-mine',
               halfOpen && !isSelected && !mine && 'is-half'].filter(Boolean).join(' ');
             return (
               <button
                 key={m}
                 type="button"
-                disabled={full && !mine}
+                disabled={disabled}
                 className={cls}
                 onClick={() => setSelected(isSelected ? null : m)}
                 aria-pressed={isSelected}
@@ -145,7 +151,7 @@ function MonthPicker({ g, user, s, lang, mode = 'pick', onPicked }) {
         {selected && (
           <Btn size="lg" block
             onClick={() => {
-              if (isRequest) store.requestMonthChange(g.id, user.id, selected, effectiveShare);
+              if (isRequest) store.requestMonthChange(g.id, user.id, slotId, selected, effectiveShare);
               else store.pickMonth(g.id, user.id, selected, effectiveShare);
               setSelected(null);
               onPicked?.();
@@ -164,24 +170,31 @@ function DueCard({ g, user, s, lang }) {
   const d = store.getDB();
   const gs = s.group;
   const due = store.currentDueMonth(g);
-  const me = store.memberOf(g, user.id);
-  if (!due || !me || g.disabled) return null;
+  const slots = store.memberSlots(g, user.id);
+  if (!due || slots.length === 0 || g.disabled) return null;
 
-  if (me.month === due) {
-    return (
-      <div className="banner banner-gold">
-        <HandCoins size={15} style={{ color: 'var(--gold)', flexShrink: 0 }} />
-        <div className="banner-main"><span className="banner-title">{gs.dueYourTurn}</span></div>
-      </div>
-    );
-  }
+  const iReceive = slots.some((sl) => sl.month === due);
+  const myDues = store.memberDuesForMonth(g, user.id, due);
+
+  // A "your turn" banner shows if any of my slots receives this month.
+  const receiveBanner = iReceive ? (
+    <div className="banner banner-gold">
+      <HandCoins size={15} style={{ color: 'var(--gold)', flexShrink: 0 }} />
+      <div className="banner-main"><span className="banner-title">{gs.dueYourTurn}</span></div>
+    </div>
+  ) : null;
+
+  // Nothing to pay this month (only receiving, or no dues) → just the banner.
+  if (myDues <= 0) return receiveBanner;
 
   const paid = store.hasPaid(g, due, user.id);
   const overdue = !paid && store.isPastGraceDay();
   const recips = store.recipientsOf(g, due);
-  const amount = fmtMoney(store.duesOf(g, me), g.currency, lang);
+  const amount = fmtMoney(myDues, g.currency, lang);
 
   return (
+    <>
+    {receiveBanner}
     <Card className={overdue ? 'card-danger-outline' : paid ? '' : 'card-primary'}>
       <div className="banner" style={{ padding: 0 }}>
         {paid
@@ -221,6 +234,7 @@ function DueCard({ g, user, s, lang }) {
         )}
       </div>
     </Card>
+    </>
   );
 }
 
@@ -239,8 +253,8 @@ function ScheduleTab({ g, user, s, lang }) {
         const isCurrent = m === current;
         const isPast = m < current;
         const halfOpen = store.monthShareTotal(g, m) === 0.5;
-        const payers = g.members.filter((mem) => mem.month !== m);
-        const paidCount = payers.filter((p) => g.payments[m]?.[p.userId]).length;
+        const payers = store.payersOf(g, m);
+        const paidCount = payers.filter((uid) => g.payments[m]?.[uid]).length;
         const rowCls = ['schedule-row', isMine && 'is-mine', !isMine && isCurrent && 'is-current',
           isPast && !isMine && 'is-past'].filter(Boolean).join(' ');
         return (
@@ -301,8 +315,8 @@ function PaymentsTab({ g, user, s, lang, admin, frozen }) {
     <div className="stack-sm">
       {months.map((m) => {
         const recips = store.recipientsOf(g, m);
-        const payers = g.members.filter((mem) => mem.month !== m);
-        const paidCount = payers.filter((p) => g.payments[m]?.[p.userId]).length;
+        const payers = store.payersOf(g, m);
+        const paidCount = payers.filter((uid) => g.payments[m]?.[uid]).length;
         const isOpen = open === m;
         return (
           <Card key={m} className="card-tight">
@@ -351,25 +365,25 @@ function PaymentsTab({ g, user, s, lang, admin, frozen }) {
                     </div>
                   );
                 })}
-                {payers.map((p) => {
-                  const pu = store.userById(d, p.userId);
-                  const paidAt = g.payments[m]?.[p.userId];
-                  const canToggle = !frozen && (admin || p.userId === user?.id);
+                {payers.map((uid) => {
+                  const pu = store.userById(d, uid);
+                  const paidAt = g.payments[m]?.[uid];
+                  const canToggle = !frozen && (admin || uid === user?.id);
                   return (
-                    <div key={p.userId} className="pay-row">
+                    <div key={uid} className="pay-row">
                       {paidAt
                         ? <CheckCircle2 size={16} style={{ color: 'var(--primary)', flexShrink: 0 }} />
                         : <Circle size={16} style={{ color: 'var(--faint)', flexShrink: 0 }} />}
                       <span className="pay-row-name">
-                        {pu?.name}{p.userId === user?.id ? ` (${gs.you})` : ''}
-                        <span className="pay-row-dues"> · {fmtMoney(store.duesOf(g, p), g.currency, lang)}</span>
+                        {pu?.name}{uid === user?.id ? ` (${gs.you})` : ''}
+                        <span className="pay-row-dues"> · {fmtMoney(store.memberDuesForMonth(g, uid, m), g.currency, lang)}</span>
                       </span>
                       <span className={`pay-row-status${paidAt ? ' is-paid' : ''}`}>
                         {paidAt ? gs.paid : gs.notPaid}
                       </span>
                       {canToggle && (
                         <Btn size="sm" variant={paidAt ? 'secondary' : 'primary'}
-                          onClick={() => store.togglePaid(g.id, m, p.userId)}>
+                          onClick={() => store.togglePaid(g.id, m, uid)}>
                           {paidAt ? gs.unmark : gs.markPaid}
                         </Btn>
                       )}
@@ -432,14 +446,11 @@ function MembersTab({ g, user, s, lang, admin, onLeft }) {
   const paidCountFor = (m) => elapsedFor(m).filter((mm) => store.hasPaid(g, mm, m.userId)).length;
 
   const doConfirm = () => {
-    if (confirming.type === 'leave') {
-      store.removeMember(g.id, user.id);
-      setConfirming(null);
-      onLeft();
-    } else {
-      store.removeMember(g.id, confirming.userId);
-      setConfirming(null);
-    }
+    const isLastOwn = confirming.type === 'leave'
+      && store.memberSlots(g, user.id).length <= 1;
+    store.removeSlot(g.id, confirming.slotId);
+    setConfirming(null);
+    if (isLastOwn) onLeft();
   };
 
   return (
@@ -450,9 +461,9 @@ function MembersTab({ g, user, s, lang, admin, onLeft }) {
         const isGroupAdmin = m.userId === g.adminId;
         const isHalf = store.shareOf(m) === 0.5;
         const elapsedCount = elapsedFor(m).length;
-        const isExpanded = expanded === m.userId;
+        const isExpanded = expanded === m.id;
         return (
-          <div key={m.userId} className="member-row" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 0, padding: 0 }}>
+          <div key={m.id} className="member-row" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 0, padding: 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', flexWrap: 'wrap' }}>
               <Avatar name={mu?.name} size={38} gold={isGroupAdmin} />
               <div className="member-main">
@@ -473,7 +484,7 @@ function MembersTab({ g, user, s, lang, admin, onLeft }) {
               </div>
               {elapsedCount > 0 && (
                 <Btn size="sm" variant="ghost"
-                  onClick={() => setExpanded(isExpanded ? null : m.userId)}
+                  onClick={() => setExpanded(isExpanded ? null : m.id)}
                   aria-expanded={isExpanded}>
                   <Badge variant={paidCountFor(m) >= elapsedCount ? 'primary' : 'muted'}>
                     {t(gs.historyChip, { p: paidCountFor(m), t: elapsedCount })}
@@ -482,12 +493,12 @@ function MembersTab({ g, user, s, lang, admin, onLeft }) {
                 </Btn>
               )}
               {admin && !isGroupAdmin && (
-                <Btn size="sm" variant="danger" onClick={() => setConfirming({ type: 'remove', userId: m.userId })}>
+                <Btn size="sm" variant="danger" onClick={() => setConfirming({ type: 'remove', slotId: m.id })}>
                   <Trash2 size={13} /> {gs.remove}
                 </Btn>
               )}
               {isMe && !isGroupAdmin && (
-                <Btn size="sm" variant="danger" onClick={() => setConfirming({ type: 'leave' })}>
+                <Btn size="sm" variant="danger" onClick={() => setConfirming({ type: 'leave', slotId: m.id })}>
                   <LogOut size={13} /> {gs.leave}
                 </Btn>
               )}
@@ -605,9 +616,9 @@ function ManageTab({ g, s, platformAdmin, onDeleted }) {
             <div className="stack-sm">
               {g.monthChangeRequests.map((r) => {
                 const ru = store.userById(d, r.userId);
-                const current = store.memberOf(g, r.userId)?.month;
+                const current = g.members.find((m) => m.id === r.slotId)?.month;
                 return (
-                  <div key={r.userId} className="member-row" style={{ background: 'var(--bg)' }}>
+                  <div key={r.slotId} className="member-row" style={{ background: 'var(--bg)' }}>
                     <Avatar name={ru?.name} size={34} />
                     <div className="member-main">
                       <div className="member-name">{ru?.name}</div>
@@ -620,10 +631,10 @@ function ManageTab({ g, s, platformAdmin, onDeleted }) {
                     </div>
                     <Btn size="sm" onClick={() => {
                       setMcMsg(null);
-                      try { store.approveMonthChange(g.id, r.userId); }
+                      try { store.approveMonthChange(g.id, r.slotId); }
                       catch { setMcMsg(gs.changeErrFull); }
                     }}>{gs.approve}</Btn>
-                    <Btn size="sm" variant="danger" onClick={() => store.rejectMonthChange(g.id, r.userId)}>{gs.reject}</Btn>
+                    <Btn size="sm" variant="danger" onClick={() => store.rejectMonthChange(g.id, r.slotId)}>{gs.reject}</Btn>
                   </div>
                 );
               })}
@@ -678,12 +689,77 @@ function ManageTab({ g, s, platformAdmin, onDeleted }) {
   );
 }
 
+// ─── My months (pick, change, add extra months) ──────────────────────────────
+function MySlots({ g, user, s, lang, frozen }) {
+  const gs = s.group;
+  const d = store.getDB();
+  const [changingSlot, setChangingSlot] = useState(null);
+  const [adding, setAdding] = useState(false);
+  const slots = store.memberSlots(g, user.id);
+  const emptySlot = slots.find((sl) => !sl.month) || null;
+  const filled = slots.filter((sl) => sl.month);
+  const openCount = store.openMonths(g).length;
+
+  return (
+    <div className="stack-sm">
+      {/* First pick fills the empty join slot */}
+      {!frozen && emptySlot && (
+        <MonthPicker g={g} user={user} s={s} lang={lang} mode="pick" />
+      )}
+
+      {/* Each confirmed month */}
+      {filled.map((sl) => {
+        const change = store.monthChangeOfSlot(g, sl.id);
+        const sharedWith = store.shareOf(sl) === 0.5
+          ? namesOf(d, store.recipientsOf(g, sl.month).filter((m) => m.userId !== user.id))
+          : '';
+        if (changingSlot === sl.id && !change) {
+          return (
+            <MonthPicker key={sl.id} g={g} user={user} s={s} lang={lang} mode="request"
+              slotId={sl.id} onPicked={() => setChangingSlot(null)} onCancel={() => setChangingSlot(null)} />
+          );
+        }
+        return (
+          <div key={sl.id} className="banner banner-gold">
+            <Hourglass size={15} style={{ color: 'var(--gold)', flexShrink: 0 }} />
+            <div className="banner-main">
+              <span className="banner-title">
+                {gs.yourMonthIs} {monthLabel(sl.month, s.locale)}
+                {store.shareOf(sl) === 0.5 ? ` (${gs.halfBadge}${sharedWith ? ` — ${gs.sharedWith} ${sharedWith}` : ''})` : ''}
+              </span>
+              {change && (
+                <span className="banner-sub">{t(gs.changePending, { month: monthLabel(change.month, s.locale) })}</span>
+              )}
+            </div>
+            {change ? (
+              <Btn size="sm" variant="secondary" onClick={() => store.cancelMonthChange(g.id, sl.id)}>{s.common.cancel}</Btn>
+            ) : !frozen ? (
+              <Btn size="sm" variant="secondary" onClick={() => setChangingSlot(sl.id)}>{gs.changeMonth}</Btn>
+            ) : null}
+          </div>
+        );
+      })}
+
+      {/* Add another month */}
+      {!frozen && !emptySlot && (adding ? (
+        <MonthPicker g={g} user={user} s={s} lang={lang} mode="pick"
+          onPicked={() => setAdding(false)} onCancel={() => setAdding(false)} />
+      ) : openCount > 0 ? (
+        <div>
+          <Btn variant="secondary" onClick={() => setAdding(true)}>
+            <CalendarDays size={14} /> {gs.addMonth}
+          </Btn>
+        </div>
+      ) : null)}
+    </div>
+  );
+}
+
 // ─── Main ─────────────────────────────────────────────────────────────────────
 export default function GroupDetail({ db, groupId, initialTab, user, s, lang, onBack }) {
   const [tab, setTab] = useState(
     ['schedule', 'payments', 'members', 'manage'].includes(initialTab) ? initialTab : 'schedule',
   );
-  const [changingMonth, setChangingMonth] = useState(false);
   const g = store.groupById(db, groupId);
   const gs = s.group;
 
@@ -714,10 +790,6 @@ export default function GroupDetail({ db, groupId, initialTab, user, s, lang, on
   ].filter((tb) => !tb.memberOnly || member);
 
   const canSeeDetails = Boolean(member) || admin || platformAdmin;
-  const sharedWithNames = member?.month
-    ? namesOf(db, store.recipientsOf(g, member.month).filter((m) => m.userId !== user.id))
-    : '';
-  const myChange = store.monthChangeOf(g, user.id);
 
   return (
     <div className="page stack">
@@ -788,44 +860,9 @@ export default function GroupDetail({ db, groupId, initialTab, user, s, lang, on
       {/* This month's due payment */}
       {member && <DueCard g={g} user={user} s={s} lang={lang} />}
 
-      {/* Month picker: first pick is free; changes go through admin approval */}
-      {member && !frozen && !member.month && (
-        <MonthPicker g={g} user={user} s={s} lang={lang} mode="pick" />
-      )}
-      {member && !frozen && member.month && changingMonth && !myChange && (
-        <MonthPicker g={g} user={user} s={s} lang={lang} mode="request"
-          onPicked={() => setChangingMonth(false)} />
-      )}
-      {member && member.month && myChange && (
-        <div className="banner banner-gold">
-          <Hourglass size={15} style={{ color: 'var(--gold)', flexShrink: 0 }} />
-          <div className="banner-main">
-            <div className="banner-title">
-              {gs.yourMonthIs} {monthLabel(member.month, s.locale)}
-            </div>
-            <div className="banner-sub">
-              {t(gs.changePending, { month: monthLabel(myChange.month, s.locale) })}
-            </div>
-          </div>
-          <Btn size="sm" variant="secondary" onClick={() => store.cancelMonthChange(g.id, user.id)}>
-            {s.common.cancel}
-          </Btn>
-        </div>
-      )}
-      {member && member.month && !myChange && !changingMonth && (
-        <div className="banner banner-gold">
-          <Hourglass size={15} style={{ color: 'var(--gold)', flexShrink: 0 }} />
-          <div className="banner-main">
-            <span className="banner-title">
-              {gs.yourMonthIs} {monthLabel(member.month, s.locale)}
-              {store.shareOf(member) === 0.5 ? ` (${gs.halfBadge}${sharedWithNames ? ` — ${gs.sharedWith} ${sharedWithNames}` : ''})` : ''}
-            </span>
-          </div>
-          {!frozen && (
-            <Btn size="sm" variant="secondary" onClick={() => setChangingMonth(true)}>{gs.changeMonth}</Btn>
-          )}
-        </div>
-      )}
+      {/* Your months: pick your first month, change a month (admin approval),
+          or add extra months (any number of open months) */}
+      {member && <MySlots g={g} user={user} s={s} lang={lang} frozen={frozen} />}
 
       {/* Non-members see the summary only; details unlock on approval */}
       {!canSeeDetails && (

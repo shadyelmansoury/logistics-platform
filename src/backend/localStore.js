@@ -2,7 +2,7 @@
 // Used automatically when no Supabase keys are configured, so the app
 // always runs — as a single-browser demo.
 
-import { memberOf, hasRequested, groupById, validateGroupPatch, validateMonthPick, isGroupFull } from './helpers.js';
+import { memberOf, memberSlots, hasRequested, groupById, validateGroupPatch, validateMonthPick, isGroupFull } from './helpers.js';
 
 const DB_KEY = 'gameea_db_v1';
 
@@ -120,7 +120,7 @@ export async function createGroup({ name, description, amount, currency, maxMemb
     hidden: false,
     disabled: false,
     createdAt: Date.now(),
-    members: [{ userId: adminId, month: null, share: 1, joinedAt: Date.now() }],
+    members: [{ id: uid(), userId: adminId, month: null, share: 1, joinedAt: Date.now() }],
     joinRequests: [],
     monthChangeRequests: [],
     payments: {},
@@ -156,7 +156,7 @@ export function approveRequest(groupId, userId) {
   patchGroup(groupId, (gr) => {
     if (!hasRequested(gr, userId) || memberOf(gr, userId)) return gr;
     gr.joinRequests = gr.joinRequests.filter((r) => r.userId !== userId);
-    gr.members = [...gr.members, { userId, month: null, share: 1, joinedAt: Date.now() }];
+    gr.members = [...gr.members, { id: uid(), userId, month: null, share: 1, joinedAt: Date.now() }];
     return gr;
   });
 }
@@ -165,6 +165,7 @@ export function rejectRequest(groupId, userId) {
   cancelRequest(groupId, userId);
 }
 
+// Fill the member's empty slot, or add a new slot (an extra month).
 export function pickMonth(groupId, userId, month, share = 1) {
   patchGroup(groupId, (g) => {
     let grantedShare;
@@ -173,42 +174,55 @@ export function pickMonth(groupId, userId, month, share = 1) {
     } catch {
       return g;
     }
-    g.members = g.members.map((m) =>
-      (m.userId === userId ? { ...m, month, share: grantedShare } : m));
+    const emptySlot = memberSlots(g, userId).find((m) => !m.month);
+    if (emptySlot) {
+      g.members = g.members.map((m) =>
+        (m.id === emptySlot.id ? { ...m, month, share: grantedShare } : m));
+    } else {
+      g.members = [...g.members, { id: uid(), userId, month, share: grantedShare, joinedAt: Date.now() }];
+    }
     return g;
   });
 }
 
-export function requestMonthChange(groupId, userId, month, share = 1) {
+export function requestMonthChange(groupId, userId, slotId, month, share = 1) {
   patchGroup(groupId, (g) => {
-    const list = (g.monthChangeRequests || []).filter((r) => r.userId !== userId);
-    g.monthChangeRequests = [...list, { userId, month, share, requestedAt: Date.now() }];
+    const list = (g.monthChangeRequests || []).filter((r) => r.slotId !== slotId);
+    g.monthChangeRequests = [...list, { slotId, userId, month, share, requestedAt: Date.now() }];
     return g;
   });
 }
 
-export function cancelMonthChange(groupId, userId) {
+export function cancelMonthChange(groupId, slotId) {
   patchGroup(groupId, (g) => {
-    g.monthChangeRequests = (g.monthChangeRequests || []).filter((r) => r.userId !== userId);
+    g.monthChangeRequests = (g.monthChangeRequests || []).filter((r) => r.slotId !== slotId);
     return g;
   });
 }
 
-export function approveMonthChange(groupId, userId) {
+export function approveMonthChange(groupId, slotId) {
   const g = groupById(db, groupId);
-  const req = g?.monthChangeRequests?.find((r) => r.userId === userId);
+  const req = g?.monthChangeRequests?.find((r) => r.slotId === slotId);
   if (!req) return;
-  const granted = validateMonthPick(g, userId, req.month, req.share); // throws 'monthFull'
+  const granted = validateMonthPick(g, req.userId, req.month, req.share, slotId); // throws 'monthFull'
   patchGroup(groupId, (gr) => {
     gr.members = gr.members.map((m) =>
-      (m.userId === userId ? { ...m, month: req.month, share: granted } : m));
-    gr.monthChangeRequests = gr.monthChangeRequests.filter((r) => r.userId !== userId);
+      (m.id === slotId ? { ...m, month: req.month, share: granted } : m));
+    gr.monthChangeRequests = gr.monthChangeRequests.filter((r) => r.slotId !== slotId);
     return gr;
   });
 }
 
-export function rejectMonthChange(groupId, userId) {
-  cancelMonthChange(groupId, userId);
+export function rejectMonthChange(groupId, slotId) {
+  cancelMonthChange(groupId, slotId);
+}
+
+// Remove one slot (a member giving up a month, or an admin removing one).
+export function removeSlot(groupId, slotId) {
+  patchGroup(groupId, (g) => {
+    g.members = g.members.filter((m) => m.id !== slotId);
+    return g;
+  });
 }
 
 export function setGroupHidden(groupId, hidden) {

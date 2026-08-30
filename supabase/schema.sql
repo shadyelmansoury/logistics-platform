@@ -33,15 +33,22 @@ create table public.groups (
   created_at timestamptz not null default now()
 );
 
+-- Each row is one slot (month). A member may hold several slots in a group.
 create table public.group_members (
+  id uuid primary key default gen_random_uuid(),
   group_id uuid not null references public.groups(id) on delete cascade,
   user_id uuid not null references public.profiles(id) on delete cascade,
   month text check (month ~ '^\d{4}-\d{2}$'),
   -- 1 = full month; 0.5 = month split with one other member
   share numeric not null default 1 check (share in (0.5, 1)),
-  joined_at timestamptz not null default now(),
-  primary key (group_id, user_id)
+  joined_at timestamptz not null default now()
 );
+-- A member can't hold the same month twice, and keeps at most one empty
+-- (unpicked) slot per group.
+create unique index group_members_user_month_uniq
+  on public.group_members (group_id, user_id, month) where month is not null;
+create unique index group_members_one_empty_slot
+  on public.group_members (group_id, user_id) where month is null;
 
 -- A month holds one full-share member, or at most two half-share members.
 create or replace function public.check_month_capacity()
@@ -55,7 +62,7 @@ begin
   if new.month is null then return new; end if;
   select count(*), coalesce(sum(share), 0) into occ_count, occ_total
     from public.group_members
-    where group_id = new.group_id and month = new.month and user_id <> new.user_id;
+    where group_id = new.group_id and month = new.month and id <> new.id;
   if occ_count >= 2 or occ_total >= 1 then
     raise exception 'month is fully taken';
   end if;
@@ -215,9 +222,21 @@ create policy "groups_delete_admin" on public.groups
 -- their own row (picking a month) and leave; the admin can do both for anyone.
 create policy "members_select" on public.group_members
   for select to authenticated using (true);
-create policy "members_insert_admin" on public.group_members
+-- The group admin adds the first slot (approval); a member may then add their
+-- own extra slots (months) to a group they already belong to.
+create policy "members_insert" on public.group_members
   for insert to authenticated
-  with check (public.is_group_admin(group_id) or public.is_platform_admin());
+  with check (
+    public.is_group_admin(group_id)
+    or public.is_platform_admin()
+    or (
+      user_id = auth.uid()
+      and exists (select 1 from public.group_members gm
+                  where gm.group_id = group_members.group_id and gm.user_id = auth.uid())
+      and not exists (select 1 from public.groups g
+                      where g.id = group_id and (g.disabled or g.hidden))
+    )
+  );
 create policy "members_update" on public.group_members
   for update to authenticated using (
     (user_id = auth.uid()
@@ -293,13 +312,14 @@ create policy "mfa_payments" on public.payments
 
 -- ─── Month-change requests (changes after confirmation need admin approval) ──
 
+-- A pending change targets one slot (group_members row).
 create table public.month_change_requests (
+  slot_id uuid primary key references public.group_members(id) on delete cascade,
   group_id uuid not null references public.groups(id) on delete cascade,
   user_id uuid not null references public.profiles(id) on delete cascade,
   month text not null check (month ~ '^\d{4}-\d{2}$'),
   share numeric not null default 1 check (share in (0.5, 1)),
-  requested_at timestamptz not null default now(),
-  primary key (group_id, user_id)
+  requested_at timestamptz not null default now()
 );
 
 alter table public.month_change_requests enable row level security;
@@ -362,9 +382,9 @@ returns table (
 language sql stable security definer set search_path = public
 as $$
   with cur as (select to_char(current_date, 'YYYY-MM') as ym)
-  select g.id, g.name, g.amount * gm.share, g.currency,
+  select g.id, g.name, sum(g.amount * gm.share) as amount, g.currency,
          g.admin_id, cur.ym,
-         p.id, p.name, p.email, p.phone, gm.share
+         p.id, p.name, p.email, p.phone, 1::numeric as share
   from public.groups g
   cross join cur
   join public.group_members gm on gm.group_id = g.id
@@ -378,7 +398,8 @@ as $$
     and not exists (
       select 1 from public.payments pay
       where pay.group_id = g.id and pay.month = cur.ym and pay.payer_id = gm.user_id
-    );
+    )
+  group by g.id, g.name, g.currency, g.admin_id, cur.ym, p.id, p.name, p.email, p.phone;
 $$;
 
 revoke all on function public.overdue_payers() from public;
