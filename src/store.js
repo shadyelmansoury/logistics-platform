@@ -55,6 +55,8 @@ export const adminDeleteUser = (userId) => impl.adminDeleteUser(userId);
 export const approveUser = (userId) => impl.approveUser(userId);
 // Admin creates a member account for someone who can't sign up.
 export const adminCreateMember = (form) => impl.adminCreateMember(form);
+// Admin adds a member to a group and (optionally) assigns a month.
+export const adminAddMember = (groupId, userId, month, share) => impl.adminAddMember(groupId, userId, month, share);
 // Month changes target a specific slot.
 export const requestMonthChange = (groupId, userId, slotId, month, share) => impl.requestMonthChange(groupId, userId, slotId, month, share);
 export const cancelMonthChange = (groupId, slotId) => impl.cancelMonthChange(groupId, slotId);

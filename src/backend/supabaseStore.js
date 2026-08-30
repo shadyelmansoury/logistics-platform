@@ -432,6 +432,21 @@ export function approveUser(userId) {
   run(sb.from('profiles').update({ approved: true }).eq('id', userId)).catch(() => {});
 }
 
+// Admin adds a member to a group directly (optionally assigning a month),
+// skipping the join-request/approval round-trip. RLS lets admins insert
+// membership rows for any user.
+export function adminAddMember(groupId, userId, month = null, share = 1) {
+  const g = groupById(db, groupId);
+  if (!g) throw new Error('noGroup');
+  if (!month && g.members.some((m) => m.userId === userId)) return; // already in the group
+  if (g.members.length >= g.maxMembers * 2) throw new Error('groupFull');
+  let grantedShare = share;
+  if (month) grantedShare = validateMonthPick(g, userId, month, share); // throws monthFull/badMonth
+  run(sb.from('group_members').insert({
+    group_id: groupId, user_id: userId, month: month || null, share: month ? grantedShare : 1,
+  })).catch(() => {});
+}
+
 // A platform admin creates a member account for someone who can't sign up.
 // Runs server-side (edge function) with the service role, gated to admins.
 export async function adminCreateMember({ firstName, lastName, email, phone, etransferEmail, password }) {

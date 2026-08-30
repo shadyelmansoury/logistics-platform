@@ -250,6 +250,22 @@ export function approveUser(userId) {
   commit();
 }
 
+// Admin adds a member to a group directly (optionally assigning a month).
+export function adminAddMember(groupId, userId, month = null, share = 1) {
+  const g = groupById(db, groupId);
+  if (!g) throw new Error('noGroup');
+  if (!month && g.members.some((m) => m.userId === userId)) return;
+  if (g.members.length >= g.maxMembers * 2) throw new Error('groupFull');
+  let grantedShare = share;
+  if (month) grantedShare = validateMonthPick(g, userId, month, share);
+  patchGroup(groupId, (gr) => {
+    gr.members = [...gr.members, {
+      id: uid(), userId, month: month || null, share: month ? grantedShare : 1, joinedAt: Date.now(),
+    }];
+    return gr;
+  });
+}
+
 // Demo: admin creates a pre-approved member account.
 export async function adminCreateMember({ firstName, lastName, email, phone, etransferEmail, password }) {
   const normEmail = email.trim().toLowerCase();

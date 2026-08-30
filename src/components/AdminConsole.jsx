@@ -13,14 +13,20 @@ import * as store from '../store.js';
 const STATUS_VARIANT = { forming: 'gold', active: 'primary', completed: 'muted' };
 
 // ─── Create a member account (for people who can't sign up) ──────────────────
-function CreateMemberForm({ s }) {
+function CreateMemberForm({ s, db }) {
   const ac = s.adminc;
   const a = s.auth;
+  const gs = s.group;
   const blank = { firstName: '', lastName: '', phone: '', email: '', etransferEmail: '', password: '' };
   const [form, setForm] = useState(blank);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
-  const [done, setDone] = useState(null); // { email, password }
+  const [done, setDone] = useState(null); // { email, password, userId }
+  // group/month assignment (after creation)
+  const [assignGid, setAssignGid] = useState('');
+  const [assignMonth, setAssignMonth] = useState('');
+  const [assignMsg, setAssignMsg] = useState(null);
+  const [assigned, setAssigned] = useState([]);
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
 
   const errText = (code) =>
@@ -38,12 +44,13 @@ function CreateMemberForm({ s }) {
     if (form.password.length < 8) return setErr(ac.createErrWeak);
     setBusy(true);
     try {
-      await store.adminCreateMember({
+      const res = await store.adminCreateMember({
         firstName: form.firstName, lastName: form.lastName, email: form.email,
         phone: form.phone, etransferEmail: form.etransferEmail || form.email, password: form.password,
       });
-      setDone({ email: form.email.trim().toLowerCase(), password: form.password });
+      setDone({ email: form.email.trim().toLowerCase(), password: form.password, userId: res?.userId });
       setForm(blank);
+      setAssigned([]); setAssignGid(''); setAssignMonth(''); setAssignMsg(null);
     } catch (e2) {
       setErr(errText(e2.message));
     } finally {
@@ -52,6 +59,21 @@ function CreateMemberForm({ s }) {
   };
 
   if (done) {
+    const groups = (db?.groups || []).filter((g) => !g.disabled);
+    const g = groups.find((x) => x.id === assignGid) || null;
+    const months = g ? store.openMonths(g) : [];
+    const doAssign = () => {
+      if (!assignGid || !done.userId) return;
+      setAssignMsg(null);
+      try {
+        store.adminAddMember(assignGid, done.userId, assignMonth || null);
+        const suffix = assignMonth ? ` — ${monthLabel(assignMonth, s.locale)}` : '';
+        setAssigned((list) => [...list, t(ac.assignedOk, { group: g?.name || '', month: suffix })]);
+        setAssignGid(''); setAssignMonth('');
+      } catch (e2) {
+        setAssignMsg(e2.message === 'groupFull' ? gs.errFull : ac.assignErrFull);
+      }
+    };
     return (
       <Card>
         <div className="stack" style={{ gap: 10 }}>
@@ -61,7 +83,29 @@ function CreateMemberForm({ s }) {
             <CopyChip text={done.email} copyLabel={s.common.copy} copiedLabel={s.common.copied} /></div>
           <div className="send-to"><span>{a.password}:</span>
             <CopyChip text={done.password} copyLabel={s.common.copy} copiedLabel={s.common.copied} /></div>
-          <div><Btn variant="secondary" onClick={() => setDone(null)}>{ac.createAnother}</Btn></div>
+
+          {done.userId && groups.length > 0 && (
+            <div className="stack-sm" style={{ marginTop: 6 }}>
+              <SectionTitle>{ac.assignTitle}</SectionTitle>
+              {assigned.map((line, i) => <InfoBox key={i}>{line}</InfoBox>)}
+              {assignMsg && <ErrorBox>{assignMsg}</ErrorBox>}
+              <div className="form-row form-row-2">
+                <select className="input" value={assignGid}
+                  onChange={(e) => { setAssignGid(e.target.value); setAssignMonth(''); setAssignMsg(null); }}>
+                  <option value="">{ac.assignGroupPh}</option>
+                  {groups.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
+                </select>
+                <select className="input" value={assignMonth}
+                  onChange={(e) => setAssignMonth(e.target.value)} disabled={!assignGid}>
+                  <option value="">{ac.assignMonthLater}</option>
+                  {months.map((m) => <option key={m} value={m}>{monthLabel(m, s.locale)}</option>)}
+                </select>
+              </div>
+              <div><Btn variant="secondary" onClick={doAssign} disabled={!assignGid}>{ac.assignBtn}</Btn></div>
+            </div>
+          )}
+
+          <div><Btn onClick={() => setDone(null)}>{ac.createAnother}</Btn></div>
         </div>
       </Card>
     );
@@ -141,7 +185,7 @@ export default function AdminConsole({ db, user, s, lang, onOpen, onBack }) {
       </div>
 
       {/* Create a member account on someone's behalf */}
-      <CreateMemberForm s={s} />
+      <CreateMemberForm s={s} db={db} />
 
       {/* Pending registrations */}
       <section className="stack-sm">
