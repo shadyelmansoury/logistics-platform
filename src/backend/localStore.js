@@ -225,6 +225,18 @@ export function removeSlot(groupId, slotId) {
   });
 }
 
+// Admin moves a member's slot straight to another month (no approval step).
+export function moveSlot(groupId, slotId, month, share = 1) {
+  const g = groupById(db, groupId);
+  const slot = g?.members.find((m) => m.id === slotId);
+  if (!slot) return;
+  const granted = validateMonthPick(g, slot.userId, month, share, slotId); // throws 'monthFull'
+  patchGroup(groupId, (gr) => {
+    gr.members = gr.members.map((m) => (m.id === slotId ? { ...m, month, share: granted } : m));
+    return gr;
+  });
+}
+
 export function setGroupHidden(groupId, hidden) {
   patchGroup(groupId, (g) => ({ ...g, hidden }));
 }

@@ -411,6 +411,15 @@ export function removeSlot(groupId, slotId) {
   run(sb.from('group_members').delete().eq('id', slotId)).catch(() => {});
 }
 
+// Admin moves a member's slot straight to another month (no approval step).
+export function moveSlot(groupId, slotId, month, share = 1) {
+  const g = groupById(db, groupId);
+  const slot = g?.members.find((m) => m.id === slotId);
+  if (!slot) return;
+  const granted = validateMonthPick(g, slot.userId, month, share, slotId); // throws 'monthFull'
+  run(sb.from('group_members').update({ month, share: granted }).eq('id', slotId)).catch(() => {});
+}
+
 export function setGroupHidden(groupId, hidden) {
   run(sb.from('groups').update({ hidden }).eq('id', groupId)).catch(() => {});
 }

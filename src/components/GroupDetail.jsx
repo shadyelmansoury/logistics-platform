@@ -71,16 +71,18 @@ function Header({ g, s, lang, admin, platformAdmin, me, onEdit }) {
 }
 
 // ─── Month picker (supports full and half shares) ─────────────────────────────
-function MonthPicker({ g, user, s, lang, mode = 'pick', slotId = null, onPicked, onCancel }) {
+function MonthPicker({
+  g, s, forUserId, excludeSlotId = null,
+  title, hint, cta, onConfirm, onCancel, errorMsg,
+}) {
   const [selected, setSelected] = useState(null);
   const [shareChoice, setShareChoice] = useState('full');
   const gs = s.group;
   const months = store.monthsOf(g);
   const d = store.getDB();
-  const isRequest = mode === 'request';
 
   const selectedOthers = selected
-    ? store.recipientsOf(g, selected).filter((m) => m.userId !== user.id)
+    ? store.recipientsOf(g, selected).filter((m) => m.userId !== forUserId && m.id !== excludeSlotId)
     : [];
   const joiningHalf = selectedOthers.length === 1;
   const effectiveShare = joiningHalf ? 0.5 : (shareChoice === 'half' ? 0.5 : 1);
@@ -92,9 +94,9 @@ function MonthPicker({ g, user, s, lang, mode = 'pick', slotId = null, onPicked,
           <div>
             <div className="group-card-title" style={{ fontSize: 17 }}>
               <CalendarDays size={17} style={{ color: 'var(--primary)' }} />
-              <span>{isRequest ? gs.requestChangeTitle : gs.pickTitle}</span>
+              <span>{title}</span>
             </div>
-            <p className="field-hint" style={{ marginTop: 4 }}>{isRequest ? gs.requestChangeHint : gs.pickHint}</p>
+            <p className="field-hint" style={{ marginTop: 4 }}>{hint}</p>
             <p className="field-hint" style={{ marginTop: 4 }}>{gs.shareHint}</p>
           </div>
           {onCancel && (
@@ -102,11 +104,13 @@ function MonthPicker({ g, user, s, lang, mode = 'pick', slotId = null, onPicked,
           )}
         </div>
 
+        {errorMsg && <ErrorBox>{errorMsg}</ErrorBox>}
+
         <div className="month-grid">
           {months.map((m) => {
             const here = store.recipientsOf(g, m);
-            const mine = here.some((x) => x.userId === user.id && x.id !== slotId);
-            const occupants = here.filter((x) => x.userId !== user.id && x.id !== slotId);
+            const mine = here.some((x) => x.userId === forUserId && x.id !== excludeSlotId);
+            const occupants = here.filter((x) => x.userId !== forUserId && x.id !== excludeSlotId);
             const total = occupants.reduce((sum, x) => sum + store.shareOf(x), 0);
             const full = occupants.length >= 2 || total >= 1;
             const halfOpen = occupants.length === 1 && total === 0.5;
@@ -150,13 +154,8 @@ function MonthPicker({ g, user, s, lang, mode = 'pick', slotId = null, onPicked,
 
         {selected && (
           <Btn size="lg" block
-            onClick={() => {
-              if (isRequest) store.requestMonthChange(g.id, user.id, slotId, selected, effectiveShare);
-              else store.pickMonth(g.id, user.id, selected, effectiveShare);
-              setSelected(null);
-              onPicked?.();
-            }}>
-            {isRequest ? gs.requestChangeCta : gs.confirmPick} — {monthLabel(selected, s.locale)}
+            onClick={() => { onConfirm(selected, effectiveShare); setSelected(null); }}>
+            {cta} — {monthLabel(selected, s.locale)}
             {effectiveShare === 0.5 ? ` (${gs.shareHalf})` : ''}
           </Btn>
         )}
@@ -441,6 +440,8 @@ function MembersTab({ g, user, s, lang, admin, onLeft }) {
   const gs = s.group;
   const [confirming, setConfirming] = useState(null);
   const [expanded, setExpanded] = useState(null);
+  const [moving, setMoving] = useState(null);
+  const [moveMsg, setMoveMsg] = useState(null);
   const now = store.nowMonth();
   const elapsedFor = (m) => store.monthsOf(g).filter((mm) => mm <= now && mm !== m.month);
   const paidCountFor = (m) => elapsedFor(m).filter((mm) => store.hasPaid(g, mm, m.userId)).length;
@@ -492,6 +493,12 @@ function MembersTab({ g, user, s, lang, admin, onLeft }) {
                   <ChevronExpand size={14} style={{ transform: isExpanded ? 'rotate(180deg)' : 'none' }} />
                 </Btn>
               )}
+              {admin && (
+                <Btn size="sm" variant="secondary"
+                  onClick={() => { setMoving(moving === m.id ? null : m.id); setMoveMsg(null); }}>
+                  <CalendarDays size={13} /> {gs.moveMonth}
+                </Btn>
+              )}
               {admin && !isGroupAdmin && (
                 <Btn size="sm" variant="danger" onClick={() => setConfirming({ type: 'remove', slotId: m.id })}>
                   <Trash2 size={13} /> {gs.remove}
@@ -503,6 +510,17 @@ function MembersTab({ g, user, s, lang, admin, onLeft }) {
                 </Btn>
               )}
             </div>
+            {moving === m.id && (
+              <div style={{ padding: '0 16px 14px' }}>
+                <MonthPicker g={g} s={s} forUserId={m.userId} excludeSlotId={m.id}
+                  title={gs.moveTitle} hint={gs.moveHint} cta={gs.moveCta} errorMsg={moveMsg}
+                  onConfirm={(mo, sh) => {
+                    try { store.moveSlot(g.id, m.id, mo, sh); setMoving(null); setMoveMsg(null); }
+                    catch { setMoveMsg(gs.changeErrFull); }
+                  }}
+                  onCancel={() => { setMoving(null); setMoveMsg(null); }} />
+              </div>
+            )}
             {isExpanded && <MemberHistory g={g} member={m} s={s} lang={lang} />}
           </div>
         );
@@ -704,7 +722,9 @@ function MySlots({ g, user, s, lang, frozen }) {
     <div className="stack-sm">
       {/* First pick fills the empty join slot */}
       {!frozen && emptySlot && (
-        <MonthPicker g={g} user={user} s={s} lang={lang} mode="pick" />
+        <MonthPicker g={g} s={s} forUserId={user.id}
+          title={gs.pickTitle} hint={gs.pickHint} cta={gs.confirmPick}
+          onConfirm={(m, sh) => store.pickMonth(g.id, user.id, m, sh)} />
       )}
 
       {/* Each confirmed month */}
@@ -715,8 +735,10 @@ function MySlots({ g, user, s, lang, frozen }) {
           : '';
         if (changingSlot === sl.id && !change) {
           return (
-            <MonthPicker key={sl.id} g={g} user={user} s={s} lang={lang} mode="request"
-              slotId={sl.id} onPicked={() => setChangingSlot(null)} onCancel={() => setChangingSlot(null)} />
+            <MonthPicker key={sl.id} g={g} s={s} forUserId={user.id} excludeSlotId={sl.id}
+              title={gs.requestChangeTitle} hint={gs.requestChangeHint} cta={gs.requestChangeCta}
+              onConfirm={(m, sh) => { store.requestMonthChange(g.id, user.id, sl.id, m, sh); setChangingSlot(null); }}
+              onCancel={() => setChangingSlot(null)} />
           );
         }
         return (
@@ -742,8 +764,10 @@ function MySlots({ g, user, s, lang, frozen }) {
 
       {/* Add another month */}
       {!frozen && !emptySlot && (adding ? (
-        <MonthPicker g={g} user={user} s={s} lang={lang} mode="pick"
-          onPicked={() => setAdding(false)} onCancel={() => setAdding(false)} />
+        <MonthPicker g={g} s={s} forUserId={user.id}
+          title={gs.pickTitle} hint={gs.pickHint} cta={gs.confirmPick}
+          onConfirm={(m, sh) => { store.pickMonth(g.id, user.id, m, sh); setAdding(false); }}
+          onCancel={() => setAdding(false)} />
       ) : openCount > 0 ? (
         <div>
           <Btn variant="secondary" onClick={() => setAdding(true)}>

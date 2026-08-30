@@ -59,6 +59,8 @@ export const cancelMonthChange = (groupId, slotId) => impl.cancelMonthChange(gro
 export const approveMonthChange = (groupId, slotId) => impl.approveMonthChange(groupId, slotId);
 export const rejectMonthChange = (groupId, slotId) => impl.rejectMonthChange(groupId, slotId);
 export const removeSlot = (groupId, slotId) => impl.removeSlot(groupId, slotId);
+// Admin moves a member's slot to another month directly (no approval).
+export const moveSlot = (groupId, slotId, month, share) => impl.moveSlot(groupId, slotId, month, share);
 export const removeMember = (groupId, userId) => impl.removeMember(groupId, userId);
 export const updateGroup = (groupId, patch) => impl.updateGroup(groupId, patch);
 export const deleteGroup = (groupId) => impl.deleteGroup(groupId);
