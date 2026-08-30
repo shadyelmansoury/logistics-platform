@@ -432,6 +432,22 @@ export function approveUser(userId) {
   run(sb.from('profiles').update({ approved: true }).eq('id', userId)).catch(() => {});
 }
 
+// A platform admin creates a member account for someone who can't sign up.
+// Runs server-side (edge function) with the service role, gated to admins.
+export async function adminCreateMember({ firstName, lastName, email, phone, etransferEmail, password }) {
+  const { data, error } = await sb.functions.invoke('admin-create-user', {
+    body: { firstName, lastName, email, phone, etransferEmail, password },
+  });
+  if (error) {
+    let code = 'createFailed';
+    try { const ctx = await error.context?.json?.(); if (ctx?.error) code = ctx.error; } catch { /* ignore */ }
+    throw new Error(code);
+  }
+  if (data?.error) throw new Error(data.error);
+  scheduleRefresh();
+  return data;
+}
+
 export async function adminDeleteUser(userId) {
   const { error } = await sb.rpc('admin_delete_user', { target: userId });
   scheduleRefresh();

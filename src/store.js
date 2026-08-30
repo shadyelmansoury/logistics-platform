@@ -53,6 +53,8 @@ export const setGroupHidden = (groupId, hidden) => impl.setGroupHidden(groupId, 
 export const setGroupDisabled = (groupId, disabled) => impl.setGroupDisabled(groupId, disabled);
 export const adminDeleteUser = (userId) => impl.adminDeleteUser(userId);
 export const approveUser = (userId) => impl.approveUser(userId);
+// Admin creates a member account for someone who can't sign up.
+export const adminCreateMember = (form) => impl.adminCreateMember(form);
 // Month changes target a specific slot.
 export const requestMonthChange = (groupId, userId, slotId, month, share) => impl.requestMonthChange(groupId, userId, slotId, month, share);
 export const cancelMonthChange = (groupId, slotId) => impl.cancelMonthChange(groupId, slotId);

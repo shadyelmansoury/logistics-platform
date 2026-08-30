@@ -250,6 +250,28 @@ export function approveUser(userId) {
   commit();
 }
 
+// Demo: admin creates a pre-approved member account.
+export async function adminCreateMember({ firstName, lastName, email, phone, etransferEmail, password }) {
+  const normEmail = email.trim().toLowerCase();
+  if (db.users.some((u) => u.email === normEmail)) throw new Error('email_taken');
+  const user = {
+    id: uid(),
+    firstName: firstName.trim(),
+    lastName: lastName.trim(),
+    name: `${firstName.trim()} ${lastName.trim()}`.trim(),
+    email: normEmail,
+    phone: (phone || '').trim(),
+    etransferEmail: (etransferEmail || normEmail).trim().toLowerCase(),
+    role: 'member',
+    approved: true,
+    passwordHash: await hashPassword(password),
+    createdAt: Date.now(),
+  };
+  db.users = [...db.users, user];
+  commit();
+  return { ok: true, userId: user.id };
+}
+
 export function adminDeleteUser(userId) {
   db.users = db.users.filter((u) => u.id !== userId);
   db.groups = db.groups

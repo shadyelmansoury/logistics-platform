@@ -1,13 +1,100 @@
 import { useState } from 'react';
 import {
   ArrowLeft, ShieldAlert, Users, Layers, Activity, Eye, EyeOff,
-  PauseCircle, PlayCircle, Trash2, Crown, Hourglass, BadgeCheck,
+  PauseCircle, PlayCircle, Trash2, Crown, Hourglass, BadgeCheck, UserPlus,
 } from 'lucide-react';
-import { Card, Btn, Badge, SectionTitle, Avatar, Empty, ConfirmDialog } from './ui.jsx';
+import {
+  Card, Btn, Badge, SectionTitle, Avatar, Empty, ConfirmDialog,
+  Field, Input, ErrorBox, InfoBox, PhoneInput, CopyChip,
+} from './ui.jsx';
 import { monthLabel, fmtMoney, t } from '../i18n.js';
 import * as store from '../store.js';
 
 const STATUS_VARIANT = { forming: 'gold', active: 'primary', completed: 'muted' };
+
+// ─── Create a member account (for people who can't sign up) ──────────────────
+function CreateMemberForm({ s }) {
+  const ac = s.adminc;
+  const a = s.auth;
+  const blank = { firstName: '', lastName: '', phone: '', email: '', etransferEmail: '', password: '' };
+  const [form, setForm] = useState(blank);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(null);
+  const [done, setDone] = useState(null); // { email, password }
+  const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
+
+  const errText = (code) =>
+    code === 'email_taken' ? ac.createErrTaken
+      : code === 'weak_password' ? ac.createErrWeak
+      : code === 'missing_fields' ? a.errRequired
+      : ac.createErrGeneric;
+
+  const submit = async (e) => {
+    e.preventDefault();
+    setErr(null);
+    if (!form.firstName.trim() || !form.lastName.trim() || !form.email.trim() || !form.password) {
+      return setErr(a.errRequired);
+    }
+    if (form.password.length < 8) return setErr(ac.createErrWeak);
+    setBusy(true);
+    try {
+      await store.adminCreateMember({
+        firstName: form.firstName, lastName: form.lastName, email: form.email,
+        phone: form.phone, etransferEmail: form.etransferEmail || form.email, password: form.password,
+      });
+      setDone({ email: form.email.trim().toLowerCase(), password: form.password });
+      setForm(blank);
+    } catch (e2) {
+      setErr(errText(e2.message));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (done) {
+    return (
+      <Card>
+        <div className="stack" style={{ gap: 10 }}>
+          <SectionTitle><UserPlus size={13} /> {ac.createTitle}</SectionTitle>
+          <InfoBox>{ac.createdOk}</InfoBox>
+          <div className="send-to"><span>{a.email}:</span>
+            <CopyChip text={done.email} copyLabel={s.common.copy} copiedLabel={s.common.copied} /></div>
+          <div className="send-to"><span>{a.password}:</span>
+            <CopyChip text={done.password} copyLabel={s.common.copy} copiedLabel={s.common.copied} /></div>
+          <div><Btn variant="secondary" onClick={() => setDone(null)}>{ac.createAnother}</Btn></div>
+        </div>
+      </Card>
+    );
+  }
+
+  return (
+    <Card>
+      <form onSubmit={submit} className="stack" style={{ gap: 12 }}>
+        <SectionTitle><UserPlus size={13} /> {ac.createTitle}</SectionTitle>
+        <p className="field-hint">{ac.createHint}</p>
+        {err && <ErrorBox>{err}</ErrorBox>}
+        <div className="form-row form-row-2">
+          <Field label={a.firstName}><Input value={form.firstName} onChange={set('firstName')} autoComplete="off" /></Field>
+          <Field label={a.lastName}><Input value={form.lastName} onChange={set('lastName')} autoComplete="off" /></Field>
+        </div>
+        <Field label={a.phone}>
+          <PhoneInput value={form.phone} countries={s.countries} ariaLabel={a.phone}
+            onChange={(v) => setForm((f) => ({ ...f, phone: v }))} />
+        </Field>
+        <Field label={a.email}>
+          <Input type="email" value={form.email} onChange={set('email')} dir="ltr" inputMode="email" autoComplete="off" />
+        </Field>
+        <Field label={a.etransferEmail}>
+          <Input type="email" value={form.etransferEmail} onChange={set('etransferEmail')} dir="ltr" inputMode="email" autoComplete="off" />
+        </Field>
+        <Field label={a.password}>
+          <Input value={form.password} onChange={set('password')} dir="ltr" autoComplete="off" />
+        </Field>
+        <div><Btn type="submit" disabled={busy}>{busy ? s.common.loading : ac.createBtn}</Btn></div>
+      </form>
+    </Card>
+  );
+}
 
 export default function AdminConsole({ db, user, s, lang, onOpen, onBack }) {
   const ac = s.adminc;
@@ -52,6 +139,9 @@ export default function AdminConsole({ db, user, s, lang, onOpen, onBack }) {
           </div>
         ))}
       </div>
+
+      {/* Create a member account on someone's behalf */}
+      <CreateMemberForm s={s} />
 
       {/* Pending registrations */}
       <section className="stack-sm">
