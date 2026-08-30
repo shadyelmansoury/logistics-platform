@@ -550,9 +550,24 @@ function ManageTab({ g, s, platformAdmin, onDeleted }) {
   });
   const [msg, setMsg] = useState(null);
   const [mcMsg, setMcMsg] = useState(null);
+  const [addUid, setAddUid] = useState('');
+  const [addMonth, setAddMonth] = useState('');
+  const [addMsg, setAddMsg] = useState(null);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
   const full = store.isGroupFull(g);
+  const eligible = d.users.filter((u) =>
+    (u.approved || u.role === 'admin') && !g.members.some((m) => m.userId === u.id));
+  const doAddMember = () => {
+    if (!addUid) return;
+    setAddMsg(null);
+    try {
+      store.adminAddMember(g.id, addUid, addMonth || null);
+      setAddUid(''); setAddMonth('');
+    } catch (e) {
+      setAddMsg(e.message === 'groupFull' ? gs.errFull : gs.changeErrFull);
+    }
+  };
 
   const save = (e) => {
     e.preventDefault();
@@ -620,6 +635,32 @@ function ManageTab({ g, s, platformAdmin, onDeleted }) {
               })}
               {full && <ErrorBox>{gs.errFull}</ErrorBox>}
             </div>
+          )}
+        </div>
+      </Card>
+
+      <Card>
+        <div className="stack" style={{ gap: 12 }}>
+          <SectionTitle><UserPlus size={13} /> {gs.addMemberTitle}</SectionTitle>
+          <p className="field-hint">{gs.addMemberHint}</p>
+          {addMsg && <ErrorBox>{addMsg}</ErrorBox>}
+          {eligible.length === 0 ? (
+            <Empty icon={Users} text={gs.addMemberNone} />
+          ) : (
+            <>
+              <div className="form-row form-row-2">
+                <select className="input" value={addUid} onChange={(e) => { setAddUid(e.target.value); setAddMsg(null); }}>
+                  <option value="">{gs.pickMemberPh}</option>
+                  {eligible.map((u) => <option key={u.id} value={u.id}>{u.name || u.email}</option>)}
+                </select>
+                <select className="input" value={addMonth} onChange={(e) => setAddMonth(e.target.value)} disabled={!addUid}>
+                  <option value="">{gs.monthLater}</option>
+                  {store.openMonths(g).map((m) => <option key={m} value={m}>{monthLabel(m, s.locale)}</option>)}
+                </select>
+              </div>
+              <div><Btn onClick={doAddMember} disabled={!addUid || full}>{gs.addMemberBtn}</Btn></div>
+              {full && <ErrorBox>{gs.errFull}</ErrorBox>}
+            </>
           )}
         </div>
       </Card>
