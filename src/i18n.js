@@ -60,6 +60,7 @@ export const S = {
     notif: {
       title: 'Notifications',
       empty: 'Nothing here yet — payment reminders and group activity will show up in this list.',
+      upcomingUser: 'Payment of {detail} for “{group}” is due in 3 days — get it ready',
       overdueUser: 'Your payment of {detail} for “{group}” is overdue',
       overdueAdmin: 'Members behind on payments in “{group}”: {detail}',
       joinRequest: '{detail} asked to join “{group}”',
@@ -302,6 +303,7 @@ export const S = {
     notif: {
       title: 'الإشعارات',
       empty: 'مفيش حاجة هنا لسه — تذكيرات الدفع ونشاط الجمعيات هيظهروا في القايمة دي.',
+      upcomingUser: 'قسطك {detail} لجمعية «{group}» هيبدأ بعد ٣ أيام — جهّزه',
       overdueUser: 'قسطك {detail} لجمعية «{group}» متأخر',
       overdueAdmin: 'أعضاء متأخرين في الدفع في «{group}»: {detail}',
       joinRequest: '{detail} طلب الانضمام لجمعية «{group}»',

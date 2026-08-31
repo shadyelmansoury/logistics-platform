@@ -27,6 +27,13 @@ Deno.serve(async (req) => {
   if (error) return new Response("rpc error: " + error.message, { status: 500 });
   const overdue = (data ?? []) as Overdue[];
 
+  // Upcoming payers: members due at the start of next month. upcoming_payers()
+  // returns rows only on the single day that is exactly 3 days before a month
+  // begins, so this list is empty on every other day.
+  const { data: upData, error: upErr } = await sb.rpc("upcoming_payers");
+  if (upErr) return new Response("rpc error: " + upErr.message, { status: 500 });
+  const upcoming = (upData ?? []) as Overdue[];
+
   const resendKey = Deno.env.get("RESEND_API_KEY") ?? "";
   const emailFrom = Deno.env.get("EMAIL_FROM") ?? "Gameya <onboarding@resend.dev>";
   const twilioSid = Deno.env.get("TWILIO_ACCOUNT_SID") ?? "";
@@ -122,6 +129,40 @@ Deno.serve(async (req) => {
     });
   }
 
+  // ── Upcoming reminders (3 days before the month starts) ──
+  for (const o of upcoming) {
+    processed++;
+    const base = { kind: "upcoming_user", group_id: o.group_id, user_id: o.user_id, month: o.month };
+    const money = `${o.amount} ${o.currency}`;
+
+    await once(["upcoming_user", "inapp", o.group_id, o.user_id, o.month], () =>
+      log({ ...base, channel: "inapp", status: "sent", detail: money }));
+
+    await once(["upcoming_user", "email", o.group_id, o.user_id, o.month], async () => {
+      const res = await sendEmail(
+        o.email,
+        `Gameya: payment due soon for ${o.group_name} — قسط الجمعية قرب`,
+        `<p>مرحباً ${o.user_name}،</p>
+         <p>قسطك الشهري <b>${money}</b> لجمعية «${o.group_name}» عن شهر ${o.month}
+         هيبدأ بعد ٣ أيام مع بداية الشهر. جهّز المبلغ ولما تحوّله سجّل الدفع في التطبيق.</p>
+         <p>Hi ${o.user_name}, a heads-up: your monthly payment of <b>${money}</b> for
+         the group “${o.group_name}” (${o.month}) is due in 3 days, at the start of the
+         month. Please have it ready, then send it and mark it as paid in the app.</p>
+         <p><a href="${appUrl}/#/group/${o.group_id}">${appUrl}/#/group/${o.group_id}</a></p>`,
+      );
+      await log({ ...base, channel: "email", ...res });
+    });
+
+    await once(["upcoming_user", "sms", o.group_id, o.user_id, o.month], async () => {
+      const res = await sendSms(
+        o.phone,
+        `Gameya: heads-up — your payment of ${money} for "${o.group_name}" (${o.month}) ` +
+        `is due in 3 days, at the start of the month. Details: ${appUrl}/#/group/${o.group_id}`,
+      );
+      await log({ ...base, channel: "sms", ...res });
+    });
+  }
+
   // ── Per-admin overdue summaries ──
   const byAdmin = new Map<string, Overdue[]>();
   for (const o of overdue) {
@@ -160,5 +201,11 @@ Deno.serve(async (req) => {
     });
   }
 
-  return Response.json({ ok: true, overdue: processed, admins: byAdmin.size });
+  return Response.json({
+    ok: true,
+    processed,
+    overdue: overdue.length,
+    upcoming: upcoming.length,
+    admins: byAdmin.size,
+  });
 });

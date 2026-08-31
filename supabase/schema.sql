@@ -404,6 +404,49 @@ $$;
 
 revoke all on function public.overdue_payers() from public;
 
+-- ─── Upcoming payers (heads-up 3 days before a month begins) ─────────────────
+-- Returns rows only on the single day that is exactly 3 days before a scheduled
+-- month starts, so the payment-reminders edge function can remind every member
+-- who will owe for that month while the daily cron stays unchanged.
+
+create or replace function public.upcoming_payers()
+returns table (
+  group_id uuid, group_name text, amount numeric, currency text,
+  admin_id uuid, month text,
+  user_id uuid, user_name text, email text, phone text, share numeric
+)
+language sql stable security definer set search_path = public
+as $$
+  with d as (
+    select (now() at time zone 'America/Toronto')::date as today
+  ),
+  tgt as (
+    select to_char(today + 3, 'YYYY-MM') as ym,
+           (extract(day from (today + 3)) = 1) as fire
+    from d
+  )
+  select g.id, g.name, sum(g.amount * gm.share) as amount, g.currency,
+         g.admin_id, tgt.ym,
+         p.id, p.name, p.email, p.phone, 1::numeric as share
+  from public.groups g
+  cross join tgt
+  join public.group_members gm on gm.group_id = g.id
+  join public.profiles p on p.id = gm.user_id
+  where tgt.fire
+    and not g.disabled
+    and tgt.ym >= g.start_month
+    and tgt.ym < to_char((to_date(g.start_month || '-01', 'YYYY-MM-DD')
+                          + make_interval(months => g.max_members)), 'YYYY-MM')
+    and (gm.month is null or gm.month <> tgt.ym)
+    and not exists (
+      select 1 from public.payments pay
+      where pay.group_id = g.id and pay.month = tgt.ym and pay.payer_id = gm.user_id
+    )
+  group by g.id, g.name, g.currency, g.admin_id, tgt.ym, p.id, p.name, p.email, p.phone;
+$$;
+
+revoke all on function public.upcoming_payers() from public;
+
 -- Daily reminders: deploy supabase/functions/payment-reminders and schedule it
 -- with pg_cron + pg_net (see README "Payment reminders" for the exact steps).
 

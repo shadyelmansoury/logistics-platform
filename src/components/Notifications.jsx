@@ -1,4 +1,4 @@
-import { ArrowLeft, Bell, Wallet, ShieldAlert, UserPlus, UserCheck, BadgeCheck, Hourglass, CalendarClock } from 'lucide-react';
+import { ArrowLeft, Bell, Wallet, WalletCards, ShieldAlert, UserPlus, UserCheck, BadgeCheck, Hourglass, CalendarClock } from 'lucide-react';
 import { Btn, Empty, SectionTitle } from './ui.jsx';
 import { t } from '../i18n.js';
 import * as store from '../store.js';
@@ -6,6 +6,7 @@ import * as store from '../store.js';
 // target: where tapping the notification lands — admin kinds go straight to
 // the approval surface (group Manage tab or the admin console).
 const KIND_META = {
+  upcoming_user: { Icon: WalletCards, variant: 'info', key: 'upcomingUser', target: 'group' },
   overdue_user: { Icon: Wallet, variant: 'danger', key: 'overdueUser', target: 'group' },
   overdue_admin: { Icon: ShieldAlert, variant: 'danger', key: 'overdueAdmin', target: 'manage' },
   join_request: { Icon: UserPlus, variant: 'info', key: 'joinRequest', target: 'manage' },
